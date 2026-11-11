@@ -1,5 +1,10 @@
 # sonic-trace
 
+[![CI](https://github.com/Purnima25-yeggina/sonic-trace/actions/workflows/ci.yml/badge.svg)](https://github.com/Purnima25-yeggina/sonic-trace/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Rust 1.99](https://img.shields.io/badge/Rust-1.99-orange.svg)](rust-toolchain.toml)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
 Find where a SONiC config gets stuck. `sonic-trace` follows one object across
 CONFIG_DB, APPL_DB, STATE_DB and ASIC_DB and names the stage that dropped it.
 Offline, read-only, written in Rust.
