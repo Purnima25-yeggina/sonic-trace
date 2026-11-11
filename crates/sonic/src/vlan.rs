@@ -75,7 +75,11 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, name: &str) -> Result<Report, St
         StageResult {
             stage: stage("STATE_DB", "vlanmgrd"),
             presence: pres(in_state),
-            detail: format!("{state_key} state=ok"),
+            detail: if in_state {
+                format!("{state_key} state=ok")
+            } else {
+                state_key.clone()
+            },
         },
         StageResult {
             stage: stage("ASIC_DB", "orchagent"),

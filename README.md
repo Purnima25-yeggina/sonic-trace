@@ -4,7 +4,9 @@ Find where a SONiC config gets stuck. `sonic-trace` follows one object across
 CONFIG_DB, APPL_DB, STATE_DB and ASIC_DB and names the stage that dropped it.
 Offline, read-only, written in Rust.
 
-> **Status: early work in progress.** `vlan` (with member ports), `port`, `lag` and
+> **Status: early work in progress, tested on sample data only.** It has not yet been
+> run on a dump from a real switch. See [TRY-IT.md](TRY-IT.md) to run it yourself.
+> `vlan` (with member ports), `port`, `lag` and
 > `route` are implemented. Not an official SONiC project.
 
 ## Why
@@ -140,8 +142,10 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
   The "neighbor may be unresolved" hint is a heuristic, not a proven cause.
 - It compares databases; it does not read `swss.rec`, `sairedis.rec` or syslog yet.
 - ASIC member ports are compared by count, because ASIC_DB stores OIDs.
-- The size limit bounds what is read, not what is held: parsed data can use a few
-  times the file size in memory.
+- Memory: the size limit bounds what is read, not what is held. In a test with a
+  synthetic 300,000-route dump (80 MB of JSON), a lookup took about 1.7 seconds and
+  about 970 MB of RAM, roughly 12 times the input. A dump at the default 256 MiB limit
+  could need around 3 GB. Reducing this is on the roadmap.
 - The key formats were checked against the SONiC source, not against a live
   switch. Test data is from sonic-utilities' unit tests, not real captures.
 
@@ -151,6 +155,10 @@ Not done yet:
 - Per-VRF routes (the first match is shown today).
 - More objects: ACL, neighbor, VXLAN.
 - Testing against dumps from a real switch and from several vendors' SAIs.
+- Lower memory use on large dumps.
+- For ports, compare CONFIG_DB with APPL_DB too, so a lost change is pinned to the
+  stage where it stopped.
+- A plain-English `--explain` mode (OIDs and table names are hard to read).
 - A consistent live snapshot (today the databases are dumped one after another).
 - Longer fuzzing runs in CI.
 

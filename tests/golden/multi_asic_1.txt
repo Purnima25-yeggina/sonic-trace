@@ -3,7 +3,7 @@ exit: 1
 trace: Vlan3
   CONFIG_DB    MISSING  VLAN|Vlan3
   APPL_DB      MISSING  VLAN_TABLE:Vlan3
-  STATE_DB     MISSING  VLAN_TABLE|Vlan3 state=ok
+  STATE_DB     MISSING  VLAN_TABLE|Vlan3
   ASIC_DB      MISSING  SAI VLAN with VLAN_ID=3
 => Vlan3 is not configured in CONFIG_DB
 --- stderr
