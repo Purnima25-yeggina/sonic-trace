@@ -1,3 +1,4 @@
+use crate::logs::Logs;
 use crate::snapshot::Snapshot;
 use trace_core::{Diagnosis, Presence, Report, Stage, StageResult};
 
@@ -22,6 +23,11 @@ fn pres(b: bool) -> Presence {
 /// Trace an `Ethernet<n>` port from CONFIG_DB through APPL_DB and STATE_DB to
 /// its ASIC host interface and SAI port object, then compare admin state and speed.
 pub fn trace(snap: &Snapshot, name: &str) -> Result<Report, String> {
+    trace_with(snap, &Logs::default(), name)
+}
+
+/// Like [`trace`], adding evidence from logs when the port stopped at a stage.
+pub fn trace_with(snap: &Snapshot, logs: &Logs, name: &str) -> Result<Report, String> {
     let valid = name
         .strip_prefix("Ethernet")
         .is_some_and(|n| n.parse::<u32>().is_ok());
@@ -143,13 +149,23 @@ pub fn trace(snap: &Snapshot, name: &str) -> Result<Report, String> {
         (None, "programmed through every stage".to_string())
     };
 
+    let mut evidence = diffs;
+    if stopped_at.is_some() {
+        let want = format!("SAI_HOSTIF_ATTR_NAME={name}");
+        evidence.extend(logs.evidence(
+            &format!("PORT_TABLE:{name}"),
+            &|r| r.key.starts_with("SAI_OBJECT_TYPE_HOSTIF:") && r.attrs.contains(&want.as_str()),
+            &[name],
+        ));
+    }
+
     Ok(Report {
         object: name.into(),
         stages,
         diagnosis: Diagnosis {
             stopped_at: stopped_at.map(Into::into),
             message,
-            evidence: diffs,
+            evidence,
         },
     })
 }

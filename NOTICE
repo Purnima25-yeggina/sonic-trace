@@ -3,3 +3,8 @@ Test fixtures in fixtures/community/ are copied unmodified from
 sonic-net/sonic-utilities (tests/dump_input/), which is licensed under the
 Apache License, Version 2.0. Copyright 2016-2020 Microsoft, Inc.
 They are hand-made unit-test data, not captures from a running switch.
+
+fixtures/logs/ and fixtures/multi-asic/: the log files are hand-written to match the
+line formats in sonic-swss and sonic-sairedis; their message text is synthetic, not
+real orchagent output. multi-asic/asic0 and asic1 are copies of the community
+vlan and route data above.

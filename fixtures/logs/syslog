@@ -1,0 +1,4 @@
+Nov 11 10:00:01.500000 sonic INFO swss#orchagent: example (synthetic): handled Vlan3
+Nov 11 10:00:01.600000 sonic ERR swss#orchagent: example (synthetic) error mentioning Vlan8
+Nov 11 10:00:01.700000 sonic ERR swss#orchagent: example (synthetic) error mentioning Vlan80
+Nov 11 10:00:05.000000 sonic WARNING swss#orchagent: example (synthetic) warning for route 10.0.0.16/16

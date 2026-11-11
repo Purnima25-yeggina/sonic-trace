@@ -1,3 +1,4 @@
+use crate::logs::Logs;
 use crate::snapshot::Snapshot;
 use std::collections::BTreeSet;
 use trace_core::{Diagnosis, Presence, Report, Stage, StageResult};
@@ -26,6 +27,11 @@ fn missing_from(a: &BTreeSet<String>, b: &BTreeSet<String>, from: &str, to: &str
 /// Trace `Vlan<id>` from CONFIG_DB through APPL_DB and STATE_DB to ASIC_DB,
 /// then compare its member ports across the same stages.
 pub fn trace(snap: &Snapshot, name: &str) -> Result<Report, String> {
+    trace_with(snap, &Logs::default(), name)
+}
+
+/// Like [`trace`], adding evidence from logs when the VLAN stopped at a stage.
+pub fn trace_with(snap: &Snapshot, logs: &Logs, name: &str) -> Result<Report, String> {
     let id: u32 = name
         .strip_prefix("Vlan")
         .and_then(|n| n.parse().ok())
@@ -161,6 +167,15 @@ pub fn trace(snap: &Snapshot, name: &str) -> Result<Report, String> {
                 asic_n
             ),
         );
+    }
+
+    if stopped_at.is_some() {
+        let want = format!("SAI_VLAN_ATTR_VLAN_ID={id}");
+        evidence.extend(logs.evidence(
+            &format!("VLAN_TABLE:{name}"),
+            &|r| r.key.starts_with("SAI_OBJECT_TYPE_VLAN:") && r.attrs.contains(&want.as_str()),
+            &[name],
+        ));
     }
 
     Ok(Report {

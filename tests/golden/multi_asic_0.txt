@@ -1,0 +1,10 @@
+exit: 0
+--- stdout
+trace: Vlan3
+  CONFIG_DB    present  VLAN|Vlan3
+  APPL_DB      present  VLAN_TABLE:Vlan3
+  STATE_DB     present  VLAN_TABLE|Vlan3 state=ok
+  ASIC_DB      present  ASIC_STATE:SAI_OBJECT_TYPE_VLAN:oid:0x26000000000618
+=> programmed through every stage
+   evidence: members: CONFIG_DB 2, APPL_DB 2, STATE_DB 2, ASIC_DB 2
+--- stderr

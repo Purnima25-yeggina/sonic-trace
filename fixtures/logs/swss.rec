@@ -1,0 +1,4 @@
+2026-11-11.10:00:00.000100|VLAN_TABLE:Vlan3|SET|admin_status:up|mtu:9100
+2026-11-11.10:00:01.000200|VLAN_TABLE:Vlan8|SET|admin_status:up|mtu:9100|mac:7c:fe:90:f5:36:40
+2026-11-11.10:00:02.000300|VLAN_MEMBER_TABLE:Vlan8:Ethernet0|SET|tagging_mode:tagged
+2026-11-11.10:00:03.000400|PORT_TABLE:Ethernet160|SET|admin_status:up|speed:25000

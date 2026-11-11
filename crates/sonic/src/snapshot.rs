@@ -5,6 +5,8 @@ use std::path::Path;
 
 pub type Fields = BTreeMap<String, String>;
 
+const DB_NAMES: [&str; 4] = ["CONFIG_DB", "APPL_DB", "STATE_DB", "ASIC_DB"];
+
 /// Default cap on the total bytes read from input files.
 pub const DEFAULT_MAX_INPUT_BYTES: u64 = 256 * 1024 * 1024;
 
@@ -74,13 +76,66 @@ impl Snapshot {
     /// Load a multi-database JSON file, or a bundle directory (see [`Self::from_dir`]),
     /// reading at most `max_bytes` in total.
     pub fn from_path(path: &Path, max_bytes: u64) -> Result<Self, String> {
-        let mut budget = max_bytes;
+        Self::from_path_budget(path, &mut { max_bytes })
+    }
+
+    /// Like [`Self::from_path`], deducting what it reads from a shared `budget`.
+    pub fn from_path_budget(path: &Path, budget: &mut u64) -> Result<Self, String> {
         if path.is_dir() {
-            Self::from_dir_budget(path, &mut budget)
+            Self::from_dir_budget(path, budget)
         } else {
-            let text = read_limited(path, &mut budget)?;
+            let text = read_limited(path, budget)?;
             Self::from_json(&text)
         }
+    }
+
+    /// Live mode: run `<cmd> -n <DB> [--netns asicN]` for each database and parse its
+    /// JSON output (this is how `sonic-db-dump` is called by sonic-utilities). The
+    /// databases are dumped one after another, so the snapshot is not atomic.
+    pub fn from_dump_command(
+        cmd: &str,
+        asic: Option<u32>,
+        budget: &mut u64,
+    ) -> Result<Self, String> {
+        use std::process::{Command, Stdio};
+        let mut snap = Self::default();
+        for name in DB_NAMES {
+            let mut c = Command::new(cmd);
+            c.args(["-n", name]);
+            if let Some(n) = asic {
+                c.args(["--netns", &format!("asic{n}")]);
+            }
+            // stderr is inherited so the tool's own error messages reach the user.
+            let mut child = c
+                .stdout(Stdio::piped())
+                .spawn()
+                .map_err(|e| format!("{cmd}: {e}"))?;
+            let mut text = String::new();
+            let n = match child.stdout.take() {
+                Some(out) => {
+                    out.take(budget.saturating_add(1))
+                        .read_to_string(&mut text)
+                        .map_err(|e| format!("{cmd} -n {name}: {e}"))? as u64
+                }
+                None => 0,
+            };
+            if n > *budget {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!(
+                    "{cmd} -n {name}: output exceeds the size limit (raise it with --max-input-mb)"
+                ));
+            }
+            *budget -= n;
+            let status = child.wait().map_err(|e| format!("{cmd}: {e}"))?;
+            if !status.success() {
+                return Err(format!("{cmd} -n {name} failed ({status})"));
+            }
+            let wrapped = format!("{{\"{name}\":{text}}}");
+            let one = Self::from_json(&wrapped).map_err(|e| format!("{cmd} -n {name}: {e}"))?;
+            snap.dbs.extend(one.dbs);
+        }
+        Ok(snap)
     }
 
     /// Load a bundle directory holding one redisdl dump per database
@@ -91,10 +146,9 @@ impl Snapshot {
     }
 
     fn from_dir_budget(dir: &Path, budget: &mut u64) -> Result<Self, String> {
-        const NAMES: [&str; 4] = ["CONFIG_DB", "APPL_DB", "STATE_DB", "ASIC_DB"];
         let mut snap = Self::default();
         let mut found = false;
-        for name in NAMES {
+        for name in DB_NAMES {
             // `generate_dump` writes CONFIG_DB.json; sonic-utilities test data uses config_db.json.
             let path = [
                 format!("{name}.json"),

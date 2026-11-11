@@ -118,3 +118,109 @@ fn input_over_limit_exits_2() {
         2,
     );
 }
+
+const LOGS: &str = "fixtures/logs";
+
+#[test]
+fn vlan_with_log_evidence() {
+    check(
+        "vlan_with_logs",
+        &[
+            "--snapshot",
+            VLAN,
+            "--swss-rec",
+            "fixtures/logs/swss.rec",
+            "--sairedis-rec",
+            "fixtures/logs/sairedis.rec",
+            "--syslog",
+            "fixtures/logs/syslog",
+            "vlan",
+            "Vlan8",
+        ],
+        1,
+    );
+    assert!(std::path::Path::new(LOGS).exists() || root().join(LOGS).exists());
+}
+
+#[test]
+fn multi_asic_selects_the_folder() {
+    check(
+        "multi_asic_0",
+        &[
+            "--snapshot",
+            "fixtures/multi-asic",
+            "--asic",
+            "0",
+            "vlan",
+            "Vlan3",
+        ],
+        0,
+    );
+    check(
+        "multi_asic_1",
+        &[
+            "--snapshot",
+            "fixtures/multi-asic",
+            "--asic",
+            "1",
+            "vlan",
+            "Vlan3",
+        ],
+        1,
+    );
+    check(
+        "multi_asic_missing",
+        &[
+            "--snapshot",
+            "fixtures/multi-asic",
+            "--asic",
+            "7",
+            "vlan",
+            "Vlan3",
+        ],
+        2,
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn live_mode_runs_the_dump_command() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join("sonic-trace-live-test");
+    std::fs::create_dir_all(&dir).unwrap();
+    let script = dir.join("fake-db-dump");
+    // Behaves like `sonic-db-dump -n <DB>`: prints that database's JSON.
+    std::fs::write(
+        &script,
+        format!(
+            "#!/bin/sh\n[ \"$1\" = \"-n\" ] || exit 3\ncat \"{}/fixtures/community/vlan/$(echo \"$2\" | tr A-Z a-z).json\"\n",
+            root().display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let run = |extra: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_sonic-trace"))
+            .args(["--live", "--db-dump-cmd", script.to_str().unwrap()])
+            .args(extra)
+            .output()
+            .unwrap()
+    };
+    let ok = run(&["vlan", "Vlan3"]);
+    assert_eq!(ok.status.code(), Some(0));
+    let stuck = run(&["vlan", "Vlan8"]);
+    assert_eq!(stuck.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&stuck.stderr).contains("not atomic"));
+    // A failing dump command is an input error.
+    let bad = Command::new(env!("CARGO_BIN_EXE_sonic-trace"))
+        .args(["--live", "--db-dump-cmd", "false", "vlan", "Vlan3"])
+        .output()
+        .unwrap();
+    assert_eq!(bad.status.code(), Some(2));
+    // --live and --snapshot together are rejected by the argument parser.
+    let both = Command::new(env!("CARGO_BIN_EXE_sonic-trace"))
+        .args(["--live", "--snapshot", "x", "vlan", "Vlan3"])
+        .output()
+        .unwrap();
+    assert_eq!(both.status.code(), Some(2));
+}

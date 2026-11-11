@@ -1,3 +1,4 @@
+use crate::logs::Logs;
 use crate::snapshot::{Fields, Snapshot};
 use serde_json::Value;
 use std::collections::BTreeSet;
@@ -101,6 +102,11 @@ fn appl_nexthops(snap: &Snapshot, f: &Fields) -> BTreeSet<String> {
 /// Trace a route prefix through CONFIG_DB (static routes), APPL_DB and ASIC_DB,
 /// including the SAI object its next hop resolves to.
 pub fn trace(snap: &Snapshot, prefix: &str) -> Result<Report, String> {
+    trace_with(snap, &Logs::default(), prefix)
+}
+
+/// Like [`trace`], adding evidence from logs when the route stopped at a stage.
+pub fn trace_with(snap: &Snapshot, logs: &Logs, prefix: &str) -> Result<Report, String> {
     let valid = !prefix.is_empty()
         && prefix
             .chars()
@@ -255,6 +261,15 @@ pub fn trace(snap: &Snapshot, prefix: &str) -> Result<Report, String> {
             None => (None, "programmed through every stage (no next hop, e.g. a drop route)".to_string()),
         },
     };
+
+    if stopped_at.is_some() {
+        let dest = format!("\"dest\":\"{prefix}\"");
+        evidence.extend(logs.evidence(
+            &format!("ROUTE_TABLE:{prefix}"),
+            &|r| r.key.starts_with("SAI_OBJECT_TYPE_ROUTE_ENTRY:") && r.key.contains(&dest),
+            &[prefix],
+        ));
+    }
 
     Ok(Report {
         object: prefix.into(),
