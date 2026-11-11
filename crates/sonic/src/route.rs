@@ -266,7 +266,7 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, prefix: &str) -> Result<Report, 
         let dest = format!("\"dest\":\"{prefix}\"");
         evidence.extend(logs.evidence(
             &format!("ROUTE_TABLE:{prefix}"),
-            &|r| r.key.starts_with("SAI_OBJECT_TYPE_ROUTE_ENTRY:") && r.key.contains(&dest),
+            Some(&|r| r.key.starts_with("SAI_OBJECT_TYPE_ROUTE_ENTRY:") && r.key.contains(&dest)),
             &[prefix],
         ));
     }

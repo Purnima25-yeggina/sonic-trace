@@ -154,7 +154,9 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, name: &str) -> Result<Report, St
         let want = format!("SAI_HOSTIF_ATTR_NAME={name}");
         evidence.extend(logs.evidence(
             &format!("PORT_TABLE:{name}"),
-            &|r| r.key.starts_with("SAI_OBJECT_TYPE_HOSTIF:") && r.attrs.contains(&want.as_str()),
+            Some(&|r| {
+                r.key.starts_with("SAI_OBJECT_TYPE_HOSTIF:") && r.attrs.contains(&want.as_str())
+            }),
             &[name],
         ));
     }

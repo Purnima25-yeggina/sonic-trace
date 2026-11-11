@@ -66,18 +66,29 @@ impl Logs {
         })
     }
 
+    /// Build from in-memory bytes (used by fuzzing and tests); invalid UTF-8 is replaced.
+    pub fn from_bytes(swss: Option<&[u8]>, sairedis: Option<&[u8]>, syslog: Option<&[u8]>) -> Self {
+        let text = |b: Option<&[u8]>| b.map(|b| String::from_utf8_lossy(b).into_owned());
+        Self {
+            swss: text(swss),
+            sairedis: text(sairedis),
+            syslog: text(syslog),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.swss.is_none() && self.sairedis.is_none() && self.syslog.is_none()
     }
 
     /// Evidence lines for one object.
     /// - `swss_key`: the APPL_DB-style key orchagent consumes, e.g. `VLAN_TABLE:Vlan8`
-    /// - `sai_match`: selects the `sairedis.rec` lines that belong to the object
+    /// - `sai_match`: selects the `sairedis.rec` lines that belong to the object, or `None`
+    ///   when the object cannot be identified there (the sairedis line is then skipped)
     /// - `tokens`: names to look for in syslog (whole words only)
     pub fn evidence(
         &self,
         swss_key: &str,
-        sai_match: &dyn Fn(&SaiRec) -> bool,
+        sai_match: Option<&dyn Fn(&SaiRec) -> bool>,
         tokens: &[&str],
     ) -> Vec<String> {
         let mut out = Vec::new();
@@ -100,7 +111,7 @@ impl Logs {
             });
         }
 
-        if let Some(text) = &self.sairedis {
+        if let (Some(text), Some(sai_match)) = (&self.sairedis, sai_match) {
             let events: Vec<SaiRec> = text
                 .lines()
                 .filter_map(|l| {

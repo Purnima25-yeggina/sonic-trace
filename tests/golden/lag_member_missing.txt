@@ -1,0 +1,11 @@
+exit: 1
+--- stdout
+trace: PortChannel001
+  CONFIG_DB    present  PORTCHANNEL|PortChannel001
+  APPL_DB      present  LAG_TABLE:PortChannel001
+  STATE_DB     present  LAG_TABLE|PortChannel001
+  ASIC_LAG     present  ASIC_STATE:SAI_OBJECT_TYPE_LAG:oid:0x2000000000d17
+=> some configured member ports are missing from APPL_DB
+   evidence: members: CONFIG_DB 3, APPL_DB 2, STATE_DB 2, ASIC_DB 2
+   evidence: member Ethernet8 is in CONFIG_DB but not in APPL_DB (teamd may not have enrolled it)
+--- stderr

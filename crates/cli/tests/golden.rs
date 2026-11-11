@@ -224,3 +224,23 @@ fn live_mode_runs_the_dump_command() {
         .unwrap();
     assert_eq!(both.status.code(), Some(2));
 }
+
+const LAG: &str = "fixtures/community/portchannel";
+
+#[test]
+fn lag_member_missing() {
+    check(
+        "lag_member_missing",
+        &["--snapshot", LAG, "lag", "PortChannel001"],
+        1,
+    );
+}
+
+#[test]
+fn lag_empty() {
+    check(
+        "lag_empty",
+        &["--snapshot", LAG, "lag", "PortChannel002"],
+        0,
+    );
+}

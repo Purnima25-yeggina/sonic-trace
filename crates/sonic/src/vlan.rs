@@ -173,7 +173,9 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, name: &str) -> Result<Report, St
         let want = format!("SAI_VLAN_ATTR_VLAN_ID={id}");
         evidence.extend(logs.evidence(
             &format!("VLAN_TABLE:{name}"),
-            &|r| r.key.starts_with("SAI_OBJECT_TYPE_VLAN:") && r.attrs.contains(&want.as_str()),
+            Some(&|r| {
+                r.key.starts_with("SAI_OBJECT_TYPE_VLAN:") && r.attrs.contains(&want.as_str())
+            }),
             &[name],
         ));
     }

@@ -1,0 +1,10 @@
+exit: 0
+--- stdout
+trace: PortChannel002
+  CONFIG_DB    present  PORTCHANNEL|PortChannel002
+  APPL_DB      present  LAG_TABLE:PortChannel002
+  STATE_DB     present  LAG_TABLE|PortChannel002
+  ASIC_LAG     n/a      an empty LAG has no name in SAI, so it cannot be identified in ASIC_DB
+=> present through APPL_DB; an empty LAG cannot be checked in ASIC_DB
+   evidence: members: CONFIG_DB 0, APPL_DB 0, STATE_DB 0, ASIC_DB 0
+--- stderr

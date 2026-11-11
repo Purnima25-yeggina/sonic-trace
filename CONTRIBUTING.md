@@ -18,6 +18,11 @@ Run `tools/check`. It runs formatting, Clippy (warnings are errors) and all test
   than none.
 - **Check formats against the SONiC source**, and cite the file in the pull request.
 
+## Fuzzing
+
+`tools/fuzz [seconds]` runs the libFuzzer targets in `fuzz/`. It needs nightly Rust and
+`cargo-fuzz`. Seeds are in `fuzz/seeds/`; the generated corpus is not committed.
+
 ## Tests
 
 - Unit and integration tests are in `crates/*/tests`.

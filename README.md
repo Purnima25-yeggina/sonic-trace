@@ -4,7 +4,7 @@ Find where a SONiC config gets stuck. `sonic-trace` follows one object across
 CONFIG_DB, APPL_DB, STATE_DB and ASIC_DB and names the stage that dropped it.
 Offline, read-only, written in Rust.
 
-> **Status: early work in progress.** `vlan` (with member ports), `port` and
+> **Status: early work in progress.** `vlan` (with member ports), `port`, `lag` and
 > `route` are implemented. Not an official SONiC project.
 
 ## Why
@@ -72,6 +72,29 @@ For routes, it resolves the ASIC next hop (single next hop, ECMP group, router
 interface or port) and compares the next-hop addresses with APPL_DB. A stage
 that does not apply, such as CONFIG_DB for a BGP route, is shown as `n/a`.
 
+For LAGs, the ASIC LAG object has no name in SAI, so it is identified by its member
+ports (resolved through their host interfaces). An empty LAG cannot be identified and
+is shown as `n/a`.
+
+## Logs, multi-ASIC and live mode
+
+```
+sonic-trace --snapshot bundle/ --swss-rec swss.rec --sairedis-rec sairedis.rec \
+            --syslog syslog vlan Vlan8
+sonic-trace --snapshot bundle/ --asic 1 port Ethernet0     # bundle/asic1/...
+sonic-trace --live route 10.1.1.0/24                       # runs sonic-db-dump on the switch
+```
+
+- When an object stops at a stage, the tool adds evidence from the logs. A file named
+  `swss.rec`, `sairedis.rec` or `syslog` inside the snapshot directory is used
+  automatically. Syslog lines match whole words only (`Vlan8` does not match `Vlan80`).
+- `sairedis.rec` records a SAI call but, for single creates, not its result, so the
+  evidence says a call was recorded, not that it worked. A missing record is weak
+  evidence: recordings rotate and start at boot.
+- `--live` runs `sonic-db-dump -n <DB>` for each database. The dumps are taken one after
+  another, so the snapshot is not atomic; a change in progress can look like a mismatch.
+  Rerun to confirm.
+
 Exit codes: `0` programmed everywhere, `1` stopped at a stage, `2` input error.
 Add `--json` for machine-readable output.
 
@@ -96,6 +119,9 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
 - **Safe on bad input.** The workspace denies `unsafe`, `unwrap`, `expect`, `panic!`,
   slice indexing and string slicing (see `Cargo.toml`). A truncated or odd dump
   gives an error and exit code 2.
+- **Fuzzed.** `tools/fuzz` runs libFuzzer targets for the snapshot parser (with all
+  traces) and the log parser. A first 45-second run per target, about 1.6 million and
+  0.7 million executions, found no crashes. That is a smoke test, not a guarantee.
 - **Bounded input.** It refuses to read more than 256 MiB in total (change it with
   `--max-input-mb`). Tests feed every truncation and thousands of corrupted copies of
   the fixtures through the parser and all traces, and nothing may panic.
@@ -109,7 +135,7 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
 
 ## Limits
 
-- Only VLANs, ports and routes so far.
+- Only VLANs, ports, LAGs and routes so far.
 - Routes: virtual routers (VRFs) are not distinguished; the first match is shown.
   The "neighbor may be unresolved" hint is a heuristic, not a proven cause.
 - It compares databases; it does not read `swss.rec`, `sairedis.rec` or syslog yet.
@@ -121,12 +147,12 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
 
 ## Roadmap
 
-Next, roughly in order:
-- Evidence from `swss.rec`, `sairedis.rec` and syslog.
-- Multi-ASIC dumps and per-VRF routes.
-- Live mode that reads Redis on a switch, with a consistent snapshot.
-- Coverage-guided fuzz targets for the dump parser (the corruption tests are a start, not fuzzing).
-- More objects: LAG, ACL, neighbor.
+Not done yet:
+- Per-VRF routes (the first match is shown today).
+- More objects: ACL, neighbor, VXLAN.
+- Testing against dumps from a real switch and from several vendors' SAIs.
+- A consistent live snapshot (today the databases are dumped one after another).
+- Longer fuzzing runs in CI.
 
 Ideas, not commitments: a comparison of two dumps, and a CI mode that fails when an
 object is stuck.

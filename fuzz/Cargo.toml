@@ -1,0 +1,29 @@
+[package]
+name = "sonic-trace-fuzz"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+trace-sonic = { path = "../crates/sonic" }
+
+# Not part of the main workspace: fuzzing needs a nightly toolchain.
+[workspace]
+
+[[bin]]
+name = "snapshot_json"
+path = "fuzz_targets/snapshot_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "logs"
+path = "fuzz_targets/logs.rs"
+test = false
+doc = false
+bench = false
