@@ -4,8 +4,8 @@ Find where a SONiC config gets stuck. `sonic-trace` follows one object across
 CONFIG_DB, APPL_DB, STATE_DB and ASIC_DB and names the stage that dropped it.
 Offline, read-only, written in Rust.
 
-> **Status: early work in progress.** `vlan` (with member ports) and `port`
-> are implemented. Not an official SONiC project.
+> **Status: early work in progress.** `vlan` (with member ports), `port` and
+> `route` are implemented. Not an official SONiC project.
 
 ## Why
 
@@ -54,7 +54,23 @@ trace: Ethernet160
 => host interface points at oid:0x10000000002e6 but ASIC_DB has no SAI port object with that OID
 ```
 
+```
+$ sonic-trace --snapshot fixtures/community/route route 10.0.0.16/16
+trace: 10.0.0.16/16
+  CONFIG_DB    n/a      not a static route
+  APPL_DB      present  ROUTE_TABLE:10.0.0.16/16
+  ASIC_ROUTE   MISSING  SAI route entry for 10.0.0.16/16
+  ASIC_NEXTHOP n/a      no ASIC route
+=> in APPL_DB but not in ASIC_DB; orchagent has not programmed it (check swss.rec / syslog)
+   evidence: route uses nexthop group testnhg
+   evidence: no SAI next hop exists for 10.0.0.1; its neighbor may be unresolved (check ARP/NDP)
+```
+
 For ports, it also compares configured speed and admin state with the SAI port object.
+
+For routes, it resolves the ASIC next hop (single next hop, ECMP group, router
+interface or port) and compares the next-hop addresses with APPL_DB. A stage
+that does not apply, such as CONFIG_DB for a BGP route, is shown as `n/a`.
 
 Exit codes: `0` programmed everywhere, `1` stopped at a stage, `2` input error.
 Add `--json` for machine-readable output.
@@ -75,7 +91,9 @@ cargo test
 
 ## Limits
 
-- Only VLANs and ports so far. Routes are next.
+- Only VLANs, ports and routes so far.
+- Routes: virtual routers (VRFs) are not distinguished; the first match is shown.
+  The "neighbor may be unresolved" hint is a heuristic, not a proven cause.
 - It compares databases; it does not read `swss.rec`, `sairedis.rec` or syslog yet.
 - ASIC member ports are compared by count, because ASIC_DB stores OIDs.
 - The key formats were checked against the SONiC source, not against a live

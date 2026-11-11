@@ -13,6 +13,9 @@ pub struct Stage {
 pub enum Presence {
     Present,
     Missing,
+    /// The stage does not apply to this object (e.g. a BGP route has no CONFIG_DB entry).
+    #[serde(rename = "n/a")]
+    NotApplicable,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -45,6 +48,7 @@ impl Report {
             let mark = match s.presence {
                 Presence::Present => "present",
                 Presence::Missing => "MISSING",
+                Presence::NotApplicable => "n/a",
             };
             out.push_str(&format!(
                 "  {:<12} {:<8} {}\n",
