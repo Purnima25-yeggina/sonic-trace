@@ -110,3 +110,19 @@ fn community_vlan8_missing_in_asic() {
     let r = vlan::trace(&community(), "Vlan8").unwrap();
     assert_eq!(r.diagnosis.stopped_at.as_deref(), Some("ASIC_DB"));
 }
+
+#[test]
+fn input_size_limit_is_enforced() {
+    let dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/community/vlan");
+    assert!(
+        Snapshot::from_path(&dir, 0)
+            .unwrap_err()
+            .contains("size limit")
+    );
+    // Total across files counts: the four files together are larger than 3 KiB.
+    assert!(Snapshot::from_path(&dir, 3 * 1024).is_err());
+    assert!(Snapshot::from_path(&dir, 1024 * 1024).is_ok());
+    let file = dir.join("config_db.json");
+    assert!(Snapshot::from_path(&file, 10).is_err());
+}

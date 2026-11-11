@@ -1,7 +1,32 @@
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::io::Read;
+use std::path::Path;
 
 pub type Fields = BTreeMap<String, String>;
+
+/// Default cap on the total bytes read from input files.
+pub const DEFAULT_MAX_INPUT_BYTES: u64 = 256 * 1024 * 1024;
+
+/// Read a file as UTF-8 without loading more than `budget` bytes, and deduct what was read.
+fn read_limited(path: &Path, budget: &mut u64) -> Result<String, String> {
+    let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut text = String::new();
+    // Read one byte past the budget so an oversized file is detected without loading it.
+    let n = file
+        .take(budget.saturating_add(1))
+        .read_to_string(&mut text)
+        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let n = n as u64;
+    if n > *budget {
+        return Err(format!(
+            "{}: input exceeds the size limit (raise it with --max-input-mb)",
+            path.display()
+        ));
+    }
+    *budget -= n;
+    Ok(text)
+}
 
 /// Redis databases keyed by name (CONFIG_DB, APPL_DB, ASIC_DB, ...),
 /// each a map of key -> hash fields.
@@ -46,10 +71,26 @@ impl Snapshot {
         Ok(Self { dbs })
     }
 
+    /// Load a multi-database JSON file, or a bundle directory (see [`Self::from_dir`]),
+    /// reading at most `max_bytes` in total.
+    pub fn from_path(path: &Path, max_bytes: u64) -> Result<Self, String> {
+        let mut budget = max_bytes;
+        if path.is_dir() {
+            Self::from_dir_budget(path, &mut budget)
+        } else {
+            let text = read_limited(path, &mut budget)?;
+            Self::from_json(&text)
+        }
+    }
+
     /// Load a bundle directory holding one redisdl dump per database
     /// (`CONFIG_DB.json`, `APPL_DB.json`, ...), as `generate_dump` writes them.
     /// Missing files are skipped; at least one must exist.
-    pub fn from_dir(dir: &std::path::Path) -> Result<Self, String> {
+    pub fn from_dir(dir: &Path) -> Result<Self, String> {
+        Self::from_dir_budget(dir, &mut DEFAULT_MAX_INPUT_BYTES.clone())
+    }
+
+    fn from_dir_budget(dir: &Path, budget: &mut u64) -> Result<Self, String> {
         const NAMES: [&str; 4] = ["CONFIG_DB", "APPL_DB", "STATE_DB", "ASIC_DB"];
         let mut snap = Self::default();
         let mut found = false;
@@ -63,8 +104,7 @@ impl Snapshot {
             .map(|f| dir.join(f))
             .find(|p| p.is_file());
             let Some(path) = path else { continue };
-            let text =
-                std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let text = read_limited(&path, budget)?;
             let wrapped = format!("{{\"{name}\":{text}}}");
             let one = Self::from_json(&wrapped).map_err(|e| format!("{}: {e}", path.display()))?;
             snap.dbs.extend(one.dbs);

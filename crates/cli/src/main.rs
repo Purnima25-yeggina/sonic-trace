@@ -13,6 +13,9 @@ struct Cli {
     /// dumps (`CONFIG_DB.json`, `APPL_DB.json`, `STATE_DB.json`, `ASIC_DB.json`)
     #[arg(long)]
     snapshot: std::path::PathBuf,
+    /// Refuse to read more than this many MiB of input in total
+    #[arg(long, default_value_t = 256)]
+    max_input_mb: u64,
     /// Output JSON instead of text
     #[arg(long)]
     json: bool,
@@ -31,13 +34,8 @@ enum Cmd {
 }
 
 fn run(cli: Cli) -> Result<bool, String> {
-    let snap = if cli.snapshot.is_dir() {
-        Snapshot::from_dir(&cli.snapshot)?
-    } else {
-        let text = std::fs::read_to_string(&cli.snapshot)
-            .map_err(|e| format!("{}: {e}", cli.snapshot.display()))?;
-        Snapshot::from_json(&text)?
-    };
+    let limit = cli.max_input_mb.saturating_mul(1024 * 1024);
+    let snap = Snapshot::from_path(&cli.snapshot, limit)?;
     let report = match &cli.cmd {
         Cmd::Vlan { name } => vlan::trace(&snap, name)?,
         Cmd::Port { name } => port::trace(&snap, name)?,

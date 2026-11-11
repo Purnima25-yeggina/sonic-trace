@@ -109,3 +109,12 @@ fn missing_snapshot_exits_2() {
         2,
     );
 }
+
+#[test]
+fn input_over_limit_exits_2() {
+    check(
+        "input_over_limit",
+        &["--snapshot", VLAN, "--max-input-mb", "0", "vlan", "Vlan3"],
+        2,
+    );
+}

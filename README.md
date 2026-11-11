@@ -96,6 +96,9 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
 - **Safe on bad input.** The workspace denies `unsafe`, `unwrap`, `expect`, `panic!`,
   slice indexing and string slicing (see `Cargo.toml`). A truncated or odd dump
   gives an error and exit code 2.
+- **Bounded input.** It refuses to read more than 256 MiB in total (change it with
+  `--max-input-mb`). Tests feed every truncation and thousands of corrupted copies of
+  the fixtures through the parser and all traces, and nothing may panic.
 - **Read-only and private.** It writes nothing, makes no network connections and
   sends no telemetry.
 - **Pinned output.** Golden tests in `tests/golden/` fix the exact text, JSON and
@@ -111,6 +114,8 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
   The "neighbor may be unresolved" hint is a heuristic, not a proven cause.
 - It compares databases; it does not read `swss.rec`, `sairedis.rec` or syslog yet.
 - ASIC member ports are compared by count, because ASIC_DB stores OIDs.
+- The size limit bounds what is read, not what is held: parsed data can use a few
+  times the file size in memory.
 - The key formats were checked against the SONiC source, not against a live
   switch. Test data is from sonic-utilities' unit tests, not real captures.
 
@@ -120,7 +125,7 @@ Next, roughly in order:
 - Evidence from `swss.rec`, `sairedis.rec` and syslog.
 - Multi-ASIC dumps and per-VRF routes.
 - Live mode that reads Redis on a switch, with a consistent snapshot.
-- Fuzz targets for the dump parser (not done yet).
+- Coverage-guided fuzz targets for the dump parser (the corruption tests are a start, not fuzzing).
 - More objects: LAG, ACL, neighbor.
 
 Ideas, not commitments: a comparison of two dumps, and a CI mode that fails when an
