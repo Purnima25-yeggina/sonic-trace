@@ -47,7 +47,7 @@ impl Report {
                 Presence::Missing => "MISSING",
             };
             out.push_str(&format!(
-                "  {:<10} {:<8} {}\n",
+                "  {:<12} {:<8} {}\n",
                 s.stage.name, mark, s.detail
             ));
         }

@@ -4,8 +4,8 @@ Find where a SONiC config gets stuck. `sonic-trace` follows one object across
 CONFIG_DB, APPL_DB, STATE_DB and ASIC_DB and names the stage that dropped it.
 Offline, read-only, written in Rust.
 
-> **Status: early work in progress.** Only `vlan` (with its member ports) is
-> implemented. Not an official SONiC project.
+> **Status: early work in progress.** `vlan` (with member ports) and `port`
+> are implemented. Not an official SONiC project.
 
 ## Why
 
@@ -43,6 +43,19 @@ trace: Vlan6
    evidence: member Ethernet40 is in CONFIG_DB but not in APPL_DB
 ```
 
+```
+$ sonic-trace --snapshot fixtures/community/port port Ethernet160
+trace: Ethernet160
+  CONFIG_DB    present  PORT|Ethernet160
+  APPL_DB      present  PORT_TABLE:Ethernet160
+  STATE_DB     present  PORT_TABLE|Ethernet160 state=ok
+  ASIC_HOSTIF  present  ASIC_STATE:SAI_OBJECT_TYPE_HOSTIF:oid:0xd000000000a49
+  ASIC_PORT    MISSING  ASIC_STATE:SAI_OBJECT_TYPE_PORT:oid:0x10000000002e6
+=> host interface points at oid:0x10000000002e6 but ASIC_DB has no SAI port object with that OID
+```
+
+For ports, it also compares configured speed and admin state with the SAI port object.
+
 Exit codes: `0` programmed everywhere, `1` stopped at a stage, `2` input error.
 Add `--json` for machine-readable output.
 
@@ -62,7 +75,7 @@ cargo test
 
 ## Limits
 
-- Only VLANs so far. Ports and routes are next.
+- Only VLANs and ports so far. Routes are next.
 - It compares databases; it does not read `swss.rec`, `sairedis.rec` or syslog yet.
 - ASIC member ports are compared by count, because ASIC_DB stores OIDs.
 - The key formats were checked against the SONiC source, not against a live

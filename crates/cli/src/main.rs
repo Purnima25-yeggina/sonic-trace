@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use std::process::ExitCode;
-use trace_sonic::{snapshot::Snapshot, vlan};
+use trace_sonic::{port, snapshot::Snapshot, vlan};
 
 #[derive(Parser)]
 #[command(
@@ -24,6 +24,8 @@ struct Cli {
 enum Cmd {
     /// Trace a VLAN, e.g. Vlan100
     Vlan { name: String },
+    /// Trace a front-panel port, e.g. Ethernet0
+    Port { name: String },
 }
 
 fn run(cli: Cli) -> Result<bool, String> {
@@ -36,6 +38,7 @@ fn run(cli: Cli) -> Result<bool, String> {
     };
     let report = match &cli.cmd {
         Cmd::Vlan { name } => vlan::trace(&snap, name)?,
+        Cmd::Port { name } => port::trace(&snap, name)?,
     };
     if cli.json {
         println!(
