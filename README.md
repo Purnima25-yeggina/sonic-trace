@@ -17,7 +17,105 @@ finding the cause means querying each database by hand. `sonic-trace` does that
 comparison and reports the first stage where the object is missing or the
 databases disagree.
 
-## Example
+## Usage
+
+```
+sonic-trace [OPTIONS] <COMMAND> <TARGET>
+```
+
+For example:
+
+```
+sonic-trace --snapshot fixtures/community/vlan vlan Vlan8
+            \__________________________________/ \__/ \____/
+              where the data comes from (option)   |      the object to trace
+                                                   what kind of object (command)
+```
+
+| Part | Meaning |
+|---|---|
+| `sonic-trace` | The program. |
+| `--snapshot fixtures/community/vlan` | An **option**: read the data from this folder. A snapshot is a copy of the databases saved at one moment, so the tool never touches a switch. |
+| `vlan` | The **command**: which kind of object to trace. |
+| `Vlan8` | The **target**: the name of the one object to trace. |
+
+**Options go before the command.** `sonic-trace vlan Vlan8 --snapshot dir` is rejected.
+
+### Commands and what to give them
+
+| Command | Target to give | Examples | Rejected |
+|---|---|---|---|
+| `vlan` | `Vlan` followed by a number from 1 to 4094 | `Vlan8`, `Vlan100` | `Vlan0`, `Vlan4095`, `vlan8` (case matters), `8` |
+| `port` | `Ethernet` followed by a number | `Ethernet0`, `Ethernet160` | `eth0`, `Ethernet` |
+| `lag` | `PortChannel` followed by digits | `PortChannel001`, `PortChannel1` | `PortChannel`, `Po1` |
+| `route` | An IPv4 or IPv6 prefix | `10.0.0.16/16`, `192.168.0.4/24`, `fe80::/64` | anything with spaces or letters other than hex digits |
+
+The target must match the name as it appears in the database. The tool compares text exactly,
+so `192.168.0.4/24` is looked up as written, not normalized to `192.168.0.0/24`.
+
+### Options
+
+You must give **exactly one** way to get the data: `--snapshot` or `--live`.
+
+| Option | What it does | Default |
+|---|---|---|
+| `--snapshot <PATH>` | Read saved databases. `PATH` is a folder holding one dump per database, or a single JSON file with all four. | required unless `--live` |
+| `--live` | Instead of files, run `sonic-db-dump` on this switch, once per database. Cannot be combined with `--snapshot`. | off |
+| `--db-dump-cmd <CMD>` | The program `--live` runs. | `sonic-db-dump` |
+| `--asic <N>` | For switches with several chips: use chip N. With `--snapshot`, the folder must contain an `asicN` subfolder. With `--live`, it adds `--netns asicN`. | single chip |
+| `--swss-rec <FILE>` | orchagent's `swss.rec` log, for evidence lines. | `swss.rec` in the snapshot folder, if present |
+| `--sairedis-rec <FILE>` | The `sairedis.rec` log, for evidence lines. | `sairedis.rec` in the snapshot folder, if present |
+| `--syslog <FILE>` | The syslog file, for evidence lines. | `syslog` in the snapshot folder, if present |
+| `--max-input-mb <N>` | Refuse to read more than N MiB in total, across all files. | 256 |
+| `--json` | Print JSON instead of text. | text |
+| `-h`, `--help` | Show help. `sonic-trace vlan --help` shows help for one command. | |
+| `-V`, `--version` | Show the version. | |
+
+### What a snapshot folder contains
+
+One file per database, named as `generate_dump` writes them (lowercase names such as
+`config_db.json` also work):
+
+```
+my-bundle/
+  CONFIG_DB.json
+  APPL_DB.json
+  STATE_DB.json
+  ASIC_DB.json
+  swss.rec        (optional, used for evidence)
+  sairedis.rec    (optional)
+  syslog          (optional)
+```
+
+Missing database files are skipped, but at least one must exist. For a multi-chip switch,
+put each chip's files in `asic0/`, `asic1/` and so on, and pass `--asic N`.
+
+### What you get back
+
+A report on the terminal, and an exit code.
+
+| Exit code | Meaning |
+|---|---|
+| `0` | The object is present at every stage that applies. |
+| `1` | The tool ran, and the object stopped at a stage or the databases disagree. Includes "not found anywhere". |
+| `2` | Bad input: a wrong name for the command, a missing file, an over-size input, or invalid arguments. |
+
+Stage lines show `present`, `MISSING`, or `n/a` (the stage doesn't apply to this object,
+for example CONFIG_DB for a route learned from BGP).
+
+### More examples
+
+```
+sonic-trace --snapshot bundle/ port Ethernet160
+sonic-trace --snapshot bundle/ lag PortChannel001
+sonic-trace --snapshot bundle/ route 10.0.0.16/16
+sonic-trace --snapshot bundle/ --json vlan Vlan8
+sonic-trace --snapshot bundle/ --asic 1 port Ethernet0
+sonic-trace --snapshot bundle/ --syslog /var/log/syslog vlan Vlan8
+sonic-trace --live route 10.1.1.0/24
+```
+
+## Example output
 
 Run on the community test data in `fixtures/community/vlan`:
 
