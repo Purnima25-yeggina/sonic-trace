@@ -1,0 +1,5 @@
+{
+  "CONFIG_DB": { "VLAN|Vlan100": { "vlanid": "100" } },
+  "APPL_DB": {},
+  "ASIC_DB": {}
+}

@@ -1,0 +1,22 @@
+{
+  "CONFIG_DB": {
+    "VLAN|Vlan100": {
+      "vlanid": "100"
+    }
+  },
+  "APPL_DB": {
+    "VLAN_TABLE:Vlan100": {
+      "admin_status": "up"
+    }
+  },
+  "ASIC_DB": {
+    "ASIC_STATE:SAI_OBJECT_TYPE_VLAN:oid:0x260000000005ac": {
+      "SAI_VLAN_ATTR_VLAN_ID": "100"
+    }
+  },
+  "STATE_DB": {
+    "VLAN_TABLE|Vlan100": {
+      "state": "ok"
+    }
+  }
+}

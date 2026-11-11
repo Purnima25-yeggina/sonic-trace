@@ -1,0 +1,18 @@
+{
+  "CONFIG_DB": {
+    "VLAN|Vlan100": {
+      "vlanid": "100"
+    }
+  },
+  "APPL_DB": {
+    "VLAN_TABLE:Vlan100": {
+      "admin_status": "up"
+    }
+  },
+  "ASIC_DB": {},
+  "STATE_DB": {
+    "VLAN_TABLE|Vlan100": {
+      "state": "ok"
+    }
+  }
+}

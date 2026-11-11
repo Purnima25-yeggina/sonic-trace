@@ -1,0 +1,8 @@
+{
+  "ASIC_STATE:SAI_OBJECT_TYPE_VLAN:oid:0x260000000005ac": {
+    "type": "hash",
+    "value": {
+      "SAI_VLAN_ATTR_VLAN_ID": "100"
+    }
+  }
+}

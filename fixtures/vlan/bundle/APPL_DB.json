@@ -1,0 +1,8 @@
+{
+  "VLAN_TABLE:Vlan100": {
+    "type": "hash",
+    "value": {
+      "admin_status": "up"
+    }
+  }
+}

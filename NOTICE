@@ -1,0 +1,5 @@
+sonic-trace
+Test fixtures in fixtures/community/ are copied unmodified from
+sonic-net/sonic-utilities (tests/dump_input/), which is licensed under the
+Apache License, Version 2.0. Copyright 2016-2020 Microsoft, Inc.
+They are hand-made unit-test data, not captures from a running switch.

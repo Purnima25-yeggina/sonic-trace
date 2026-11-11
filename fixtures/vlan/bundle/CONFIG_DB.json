@@ -1,0 +1,8 @@
+{
+  "VLAN|Vlan100": {
+    "type": "hash",
+    "value": {
+      "vlanid": "100"
+    }
+  }
+}
