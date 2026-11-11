@@ -1,3 +1,10 @@
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic
+)]
+
 use trace_sonic::{port, snapshot::Snapshot};
 
 fn community() -> Snapshot {

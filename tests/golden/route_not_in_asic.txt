@@ -1,0 +1,11 @@
+exit: 1
+--- stdout
+trace: 10.0.0.16/16
+  CONFIG_DB    n/a      not a static route
+  APPL_DB      present  ROUTE_TABLE:10.0.0.16/16
+  ASIC_ROUTE   MISSING  SAI route entry for 10.0.0.16/16
+  ASIC_NEXTHOP n/a      no ASIC route
+=> in APPL_DB but not in ASIC_DB; orchagent has not programmed it (check swss.rec / syslog)
+   evidence: route uses nexthop group testnhg
+   evidence: no SAI next hop exists for 10.0.0.1; its neighbor may be unresolved (check ARP/NDP)
+--- stderr

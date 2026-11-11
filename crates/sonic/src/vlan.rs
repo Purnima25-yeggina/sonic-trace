@@ -12,10 +12,8 @@ fn stage(name: &str, owner: &str) -> Stage {
 /// Port names of `<prefix><port>` keys, e.g. `VLAN_MEMBER|Vlan3|` -> {"Ethernet0", ..}.
 fn members(snap: &Snapshot, db: &str, prefix: &str, need_ok: bool) -> BTreeSet<String> {
     snap.iter(db)
-        .filter(|(k, f)| {
-            k.starts_with(prefix) && (!need_ok || f.get("state").map(String::as_str) == Some("ok"))
-        })
-        .map(|(k, _)| k[prefix.len()..].to_string())
+        .filter(|(_, f)| !need_ok || f.get("state").map(String::as_str) == Some("ok"))
+        .filter_map(|(k, _)| k.strip_prefix(prefix).map(String::from))
         .collect()
 }
 
@@ -96,7 +94,10 @@ pub fn trace(snap: &Snapshot, name: &str) -> Result<Report, String> {
         &format!("VLAN_MEMBER_TABLE|{name}|"),
         true,
     );
-    let vlan_oid = asic.map(|(k, _)| k["ASIC_STATE:SAI_OBJECT_TYPE_VLAN:".len()..].to_string());
+    let vlan_oid = asic.and_then(|(k, _)| {
+        k.strip_prefix("ASIC_STATE:SAI_OBJECT_TYPE_VLAN:")
+            .map(String::from)
+    });
     let asic_n = vlan_oid.as_ref().map_or(0, |oid| {
         snap.iter("ASIC_DB")
             .filter(|(k, f)| {

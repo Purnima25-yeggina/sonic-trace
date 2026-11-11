@@ -6,11 +6,11 @@ on:
 permissions:
   contents: read
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: rustup update stable && rustup component add clippy rustfmt
-      - run: cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo test --all
+      - name: Install the pinned toolchain
+        run: rustup show
+      - name: fmt, clippy, tests
+        run: tools/check

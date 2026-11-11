@@ -1,0 +1,47 @@
+exit: 1
+--- stdout
+{
+  "object": "Vlan8",
+  "stages": [
+    {
+      "stage": {
+        "name": "CONFIG_DB",
+        "owner": "user/CLI"
+      },
+      "presence": "present",
+      "detail": "VLAN|Vlan8"
+    },
+    {
+      "stage": {
+        "name": "APPL_DB",
+        "owner": "vlanmgrd"
+      },
+      "presence": "present",
+      "detail": "VLAN_TABLE:Vlan8"
+    },
+    {
+      "stage": {
+        "name": "STATE_DB",
+        "owner": "vlanmgrd"
+      },
+      "presence": "present",
+      "detail": "VLAN_TABLE|Vlan8 state=ok"
+    },
+    {
+      "stage": {
+        "name": "ASIC_DB",
+        "owner": "orchagent"
+      },
+      "presence": "missing",
+      "detail": "SAI VLAN with VLAN_ID=8"
+    }
+  ],
+  "diagnosis": {
+    "stopped_at": "ASIC_DB",
+    "message": "in APPL_DB but not in ASIC_DB; orchagent has not programmed it (check swss.rec / syslog)",
+    "evidence": [
+      "members: CONFIG_DB 2, APPL_DB 2, STATE_DB 2, ASIC_DB 0"
+    ]
+  }
+}
+--- stderr

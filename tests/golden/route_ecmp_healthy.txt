@@ -1,0 +1,10 @@
+exit: 0
+--- stdout
+trace: 192.168.0.4/24
+  CONFIG_DB    n/a      not a static route
+  APPL_DB      present  ROUTE_TABLE:192.168.0.4/24
+  ASIC_ROUTE   present  ROUTE_ENTRY dest=192.168.0.4/24 vr=oid:0x3000000000002
+  ASIC_NEXTHOP present  NEXT_HOP_GROUP oid:0x5000000000689
+=> programmed through every stage
+   evidence: ECMP group with 4 members: fc00::72, fc00::76, fc00::7a, fc00::7e
+--- stderr

@@ -22,7 +22,10 @@ fn pres(b: bool) -> Presence {
 /// Trace an `Ethernet<n>` port from CONFIG_DB through APPL_DB and STATE_DB to
 /// its ASIC host interface and SAI port object, then compare admin state and speed.
 pub fn trace(snap: &Snapshot, name: &str) -> Result<Report, String> {
-    if !name.starts_with("Ethernet") || name[8..].parse::<u32>().is_err() {
+    let valid = name
+        .strip_prefix("Ethernet")
+        .is_some_and(|n| n.parse::<u32>().is_ok());
+    if !valid {
         return Err(format!("'{name}' is not a port name like Ethernet0"));
     }
     let cfg_key = format!("PORT|{name}");

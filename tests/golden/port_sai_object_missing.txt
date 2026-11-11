@@ -1,0 +1,10 @@
+exit: 1
+--- stdout
+trace: Ethernet160
+  CONFIG_DB    present  PORT|Ethernet160
+  APPL_DB      present  PORT_TABLE:Ethernet160
+  STATE_DB     present  PORT_TABLE|Ethernet160 state=ok
+  ASIC_HOSTIF  present  ASIC_STATE:SAI_OBJECT_TYPE_HOSTIF:oid:0xd000000000a49
+  ASIC_PORT    MISSING  ASIC_STATE:SAI_OBJECT_TYPE_PORT:oid:0x10000000002e6
+=> host interface points at oid:0x10000000002e6 but ASIC_DB has no SAI port object with that OID
+--- stderr

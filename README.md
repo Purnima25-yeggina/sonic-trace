@@ -86,8 +86,23 @@ them) or one JSON file keyed by database name. Both the `sonic-db-dump` format
 
 ```
 cargo build --release
-cargo test
+tools/check        # fmt, clippy and all tests, same as CI
 ```
+
+The Rust toolchain is pinned in `rust-toolchain.toml`.
+
+## Design
+
+- **Safe on bad input.** The workspace denies `unsafe`, `unwrap`, `expect`, `panic!`,
+  slice indexing and string slicing (see `Cargo.toml`). A truncated or odd dump
+  gives an error and exit code 2.
+- **Read-only and private.** It writes nothing, makes no network connections and
+  sends no telemetry.
+- **Pinned output.** Golden tests in `tests/golden/` fix the exact text, JSON and
+  exit codes.
+- **Split crates.** `trace-core` holds the report model and does no I/O,
+  `trace-sonic` holds the SONiC knowledge, and `sonic-trace` is the CLI. This keeps
+  SONiC details out of the core.
 
 ## Limits
 
@@ -98,6 +113,22 @@ cargo test
 - ASIC member ports are compared by count, because ASIC_DB stores OIDs.
 - The key formats were checked against the SONiC source, not against a live
   switch. Test data is from sonic-utilities' unit tests, not real captures.
+
+## Roadmap
+
+Next, roughly in order:
+- Evidence from `swss.rec`, `sairedis.rec` and syslog.
+- Multi-ASIC dumps and per-VRF routes.
+- Live mode that reads Redis on a switch, with a consistent snapshot.
+- Fuzz targets for the dump parser (not done yet).
+- More objects: LAG, ACL, neighbor.
+
+Ideas, not commitments: a comparison of two dumps, and a CI mode that fails when an
+object is stuck.
+
+## Contributing
+
+See `CONTRIBUTING.md`. Security reports go through `SECURITY.md`.
 
 ## License
 

@@ -1,0 +1,12 @@
+exit: 1
+--- stdout
+trace: Vlan6
+  CONFIG_DB    present  VLAN|Vlan6
+  APPL_DB      MISSING  VLAN_TABLE:Vlan6
+  STATE_DB     present  VLAN_TABLE|Vlan6 state=ok
+  ASIC_DB      present  ASIC_STATE:SAI_OBJECT_TYPE_VLAN:oid:0x2600000000061a
+=> configured and STATE_DB says ok, but APPL_DB has no entry: the databases disagree
+   evidence: members: CONFIG_DB 2, APPL_DB 0, STATE_DB 2, ASIC_DB 2
+   evidence: member Ethernet32 is in CONFIG_DB but not in APPL_DB
+   evidence: member Ethernet40 is in CONFIG_DB but not in APPL_DB
+--- stderr

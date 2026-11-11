@@ -1,0 +1,4 @@
+exit: 2
+--- stdout
+--- stderr
+error: 'Ethernet0' is not a VLAN name like Vlan100
