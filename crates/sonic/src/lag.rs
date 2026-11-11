@@ -215,10 +215,10 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, name: &str) -> Result<Report, St
     evidence.extend(issues);
     if stopped_at.is_some() {
         let lag_key = found.map(|(oid, _)| format!("SAI_OBJECT_TYPE_LAG:{oid}"));
-        let by_oid = |r: &crate::logs::SaiRec| Some(r.key) == lag_key.as_deref();
+        let by_oid = |r: &crate::logs::SaiRec| Some(r.key.as_str()) == lag_key.as_deref();
         let matcher: Option<&dyn Fn(&crate::logs::SaiRec) -> bool> =
             lag_key.as_ref().map(|_| &by_oid as _);
-        evidence.extend(logs.evidence(&format!("LAG_TABLE:{name}"), matcher, &[name]));
+        evidence.extend(logs.evidence(&[format!("LAG_TABLE:{name}").as_str()], matcher, &[name]));
     }
 
     Ok(Report {
@@ -230,4 +230,22 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, name: &str) -> Result<Report, St
             evidence,
         },
     })
+}
+
+/// The ASIC LAG OID for `name`, identified by its member ports (APPL_DB members, or
+/// CONFIG_DB members if APPL_DB has none). `None` for an empty or unmatched LAG.
+pub(crate) fn lag_oid(snap: &Snapshot, name: &str) -> Option<String> {
+    let app_m = members(snap, "APPL_DB", &format!("LAG_MEMBER_TABLE:{name}:"));
+    let expected = if app_m.is_empty() {
+        members(snap, "CONFIG_DB", &format!("PORTCHANNEL_MEMBER|{name}|"))
+    } else {
+        app_m
+    };
+    if expected.is_empty() {
+        return None;
+    }
+    asic_lags(snap)
+        .into_iter()
+        .find(|(_, s)| *s == expected)
+        .map(|(oid, _)| oid)
 }

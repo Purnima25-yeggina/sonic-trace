@@ -48,10 +48,16 @@ sonic-trace --snapshot fixtures/community/vlan vlan Vlan8
 | `vlan` | `Vlan` followed by a number from 1 to 4094 | `Vlan8`, `Vlan100` | `Vlan0`, `Vlan4095`, `vlan8` (case matters), `8` |
 | `port` | `Ethernet` followed by a number | `Ethernet0`, `Ethernet160` | `eth0`, `Ethernet` |
 | `lag` | `PortChannel` followed by digits | `PortChannel001`, `PortChannel1` | `PortChannel`, `Po1` |
-| `route` | An IPv4 or IPv6 prefix | `10.0.0.16/16`, `192.168.0.4/24`, `fe80::/64` | anything with spaces or letters other than hex digits |
+| `route` | `[<VRF>:]<address>[/<mask>]` | `10.0.0.16/16`, `fe80::/64`, `10.1.0.32` (host route), `Vrf-red:20.0.0.0/24` | `10.0.0.0/33`, `1.2.3`, `Vrf:1.1.1.0/24` |
 
-The target must match the name as it appears in the database. The tool compares text exactly,
-so `192.168.0.4/24` is looked up as written, not normalized to `192.168.0.0/24`.
+Route targets in more detail:
+- **Host routes** (/32 and /128) can be given with or without the mask. SONiC writes them
+  to APPL_DB without it (`ROUTE_TABLE:10.1.0.32`) and to ASIC_DB with it; the tool
+  checks both forms. An address with no mask is treated as a host route.
+- **VRF routes** start with the VRF name, as APPL_DB writes them: `Vrf-red:20.0.0.0/24`.
+  Without a VRF, the default VRF is meant, and routes in other VRFs are not matched.
+- The address is put in canonical form (`FE80:0::1` becomes `fe80::1`), but host bits
+  are kept: `192.168.0.4/24` is looked up as written, not as `192.168.0.0/24`.
 
 ### Options
 
@@ -59,36 +65,42 @@ You must give **exactly one** way to get the data: `--snapshot` or `--live`.
 
 | Option | What it does | Default |
 |---|---|---|
-| `--snapshot <PATH>` | Read saved databases. `PATH` is a folder holding one dump per database, or a single JSON file with all four. | required unless `--live` |
+| `--snapshot <PATH>` | Read saved databases. `PATH` is an unpacked `generate_dump` bundle, its `dump/` folder, any folder holding one dump per database, or a single JSON file with all four. | required unless `--live` |
 | `--live` | Instead of files, run `sonic-db-dump` on this switch, once per database. Cannot be combined with `--snapshot`. | off |
 | `--db-dump-cmd <CMD>` | The program `--live` runs. | `sonic-db-dump` |
-| `--asic <N>` | For switches with several chips: use chip N. With `--snapshot`, the folder must contain an `asicN` subfolder. With `--live`, it adds `--netns asicN`. | single chip |
-| `--swss-rec <FILE>` | orchagent's `swss.rec` log, for evidence lines. | `swss.rec` in the snapshot folder, if present |
-| `--sairedis-rec <FILE>` | The `sairedis.rec` log, for evidence lines. | `sairedis.rec` in the snapshot folder, if present |
-| `--syslog <FILE>` | The syslog file, for evidence lines. | `syslog` in the snapshot folder, if present |
+| `--asic <N>` | For switches with several chips: use chip N. With `--snapshot`, it reads `<DB>.json.N`, the names `generate_dump` uses (an `asicN/` subfolder also works). With `--live`, it adds `--netns asicN`. | the host namespace |
+| `--swss-rec <FILE>` | orchagent's `swss.rec` log, plain or `.gz`, for evidence lines. | found in the bundle's `log/` folder, if present |
+| `--sairedis-rec <FILE>` | The `sairedis.rec` log, plain or `.gz`, for evidence lines. | found in the bundle's `log/` folder, if present |
+| `--syslog <FILE>` | The syslog file, plain or `.gz`, for evidence lines. | found in the bundle's `log/` folder, if present |
 | `--max-input-mb <N>` | Refuse to read more than N MiB in total, across all files. | 256 |
 | `--json` | Print JSON instead of text. | text |
 | `-h`, `--help` | Show help. `sonic-trace vlan --help` shows help for one command. | |
 | `-V`, `--version` | Show the version. | |
 
-### What a snapshot folder contains
+### What a snapshot contains
 
-One file per database, named as `generate_dump` writes them (lowercase names such as
-`config_db.json` also work):
+The easiest input is an unpacked support bundle from `generate_dump`. Point `--snapshot` at
+its top folder. The layout below is taken from the `generate_dump` script:
 
 ```
-my-bundle/
-  CONFIG_DB.json
-  APPL_DB.json
-  STATE_DB.json
-  ASIC_DB.json
-  swss.rec        (optional, used for evidence)
-  sairedis.rec    (optional)
-  syslog          (optional)
+sonic_dump_<host>_<date>/
+  dump/
+    CONFIG_DB.json      one file per database, in sonic-db-dump's format
+    APPL_DB.json
+    STATE_DB.json
+    ASIC_DB.json
+    APPL_DB.json.1      the same for ASIC 1 on a multi-ASIC switch (--asic 1)
+    ...
+  log/
+    swss.rec.gz         logs are gzip-compressed; used for evidence if present
+    sairedis.rec.gz
+    syslog.gz
 ```
 
-Missing database files are skipped, but at least one must exist. For a multi-chip switch,
-put each chip's files in `asic0/`, `asic1/` and so on, and pass `--asic N`.
+You can also point it at the `dump/` folder, or at any folder of per-database files
+(lowercase names such as `config_db.json` work too). Missing database files are skipped,
+but at least one must exist. `fixtures/bundle/` is a synthetic example of this layout,
+generated by `tools/gen-bundle-fixture.py`.
 
 ### What you get back
 
@@ -106,12 +118,13 @@ for example CONFIG_DB for a route learned from BGP).
 ### More examples
 
 ```
-sonic-trace --snapshot bundle/ port Ethernet160
-sonic-trace --snapshot bundle/ lag PortChannel001
-sonic-trace --snapshot bundle/ route 10.0.0.16/16
-sonic-trace --snapshot bundle/ --json vlan Vlan8
-sonic-trace --snapshot bundle/ --asic 1 port Ethernet0
-sonic-trace --snapshot bundle/ --syslog /var/log/syslog vlan Vlan8
+sonic-trace --snapshot sonic_dump_sw1_20261111/ port Ethernet160
+sonic-trace --snapshot sonic_dump_sw1_20261111/ lag PortChannel001
+sonic-trace --snapshot sonic_dump_sw1_20261111/ route 10.1.0.32
+sonic-trace --snapshot sonic_dump_sw1_20261111/ route Vrf-red:20.0.0.0/24
+sonic-trace --snapshot sonic_dump_sw1_20261111/ --json vlan Vlan8
+sonic-trace --snapshot sonic_dump_sw1_20261111/ --asic 1 port Ethernet0
+sonic-trace --snapshot my-dumps/ --syslog /var/log/syslog vlan Vlan8
 sonic-trace --live route 10.1.1.0/24
 ```
 
@@ -179,15 +192,19 @@ is shown as `n/a`.
 ## Logs, multi-ASIC and live mode
 
 ```
-sonic-trace --snapshot bundle/ --swss-rec swss.rec --sairedis-rec sairedis.rec \
+sonic-trace --snapshot sonic_dump_sw1/ vlan Vlan8          # logs in log/ are used automatically
+sonic-trace --snapshot my-dumps/ --swss-rec swss.rec --sairedis-rec sairedis.rec.gz \
             --syslog syslog vlan Vlan8
-sonic-trace --snapshot bundle/ --asic 1 port Ethernet0     # bundle/asic1/...
+sonic-trace --snapshot sonic_dump_sw1/ --asic 1 port Ethernet0   # dump/<DB>.json.1
 sonic-trace --live route 10.1.1.0/24                       # runs sonic-db-dump on the switch
 ```
 
-- When an object stops at a stage, the tool adds evidence from the logs. A file named
-  `swss.rec`, `sairedis.rec` or `syslog` inside the snapshot directory is used
+- When an object stops at a stage, the tool adds evidence from the logs. In a bundle,
+  `log/swss.rec.gz`, `log/sairedis.rec.gz` and `log/syslog.gz` are found and decompressed
   automatically. Syslog lines match whole words only (`Vlan8` does not match `Vlan80`).
+- `sairedis.rec` has two kinds of record: single calls (`c`, `r`, `s`) and bulk calls
+  (`C`, `R`, `S`, many objects on one line). Routes are usually created in bulk; both
+  kinds are read.
 - `sairedis.rec` records a SAI call but, for single creates, not its result, so the
   evidence says a call was recorded, not that it worked. A missing record is weak
   evidence: recordings rotate and start at boot.
@@ -200,9 +217,8 @@ Add `--json` for machine-readable output.
 
 ## Input
 
-`--snapshot` takes either a directory of per-database dumps (`CONFIG_DB.json`,
-`APPL_DB.json`, `STATE_DB.json`, `ASIC_DB.json`, as `generate_dump` writes
-them) or one JSON file keyed by database name. Both the `sonic-db-dump` format
+`--snapshot` takes a `generate_dump` bundle (see "What a snapshot contains"), a
+directory of per-database dumps, or one JSON file keyed by database name. Both the `sonic-db-dump` format
 (`{"type":"hash","value":{...}}`) and plain `{key: {field: value}}` are accepted.
 
 ## Build
@@ -236,21 +252,29 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
 ## Limits
 
 - Only VLANs, ports, LAGs and routes so far.
-- Routes: virtual routers (VRFs) are not distinguished; the first match is shown.
-  The "neighbor may be unresolved" hint is a heuristic, not a proven cause.
-- It compares databases; it does not read `swss.rec`, `sairedis.rec` or syslog yet.
+- Routes in a VRF are matched to their virtual router through the VRF's interfaces
+  (`INTF_TABLE` in APPL_DB and the router interfaces in ASIC_DB), because SAI objects
+  carry no VRF names. If no interface of the VRF is found, the tool falls back to any
+  non-default virtual router and says so. The default virtual router comes from syncd's
+  `HIDDEN` and `RIDTOVID` entries.
+- The "neighbor may be unresolved" hint is a heuristic, not a proven cause.
+- A route on the ASIC through a next hop but with no APPL_DB entry is reported as a
+  possible stale route; one through a router interface or the CPU port is treated as a
+  normal connected or local route.
 - ASIC member ports are compared by count, because ASIC_DB stores OIDs.
 - Memory: the size limit bounds what is read, not what is held. In a test with a
   synthetic 300,000-route dump (80 MB of JSON), a lookup took about 1.7 seconds and
   about 970 MB of RAM, roughly 12 times the input. A dump at the default 256 MiB limit
   could need around 3 GB. Reducing this is on the roadmap.
-- The key formats were checked against the SONiC source, not against a live
-  switch. Test data is from sonic-utilities' unit tests, not real captures.
+- The key formats, the bundle layout and the log formats were taken from the SONiC
+  source (sonic-swss, sonic-sairedis, sonic-utilities), not from a live switch. Test data
+  is from sonic-utilities' unit tests plus synthetic bundles, not real captures.
+- Multi-ASIC logs: the tool reads the bundle's single `log/` folder; per-ASIC log files
+  have not been checked.
 
 ## Roadmap
 
 Not done yet:
-- Per-VRF routes (the first match is shown today).
 - More objects: ACL, neighbor, VXLAN.
 - Testing against dumps from a real switch and from several vendors' SAIs.
 - Lower memory use on large dumps.

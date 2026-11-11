@@ -1,4 +1,4 @@
 exit: 2
 --- stdout
 --- stderr
-error: fixtures/multi-asic: no asic7 folder
+error: fixtures/multi-asic: no <DB>.json dump files found for ASIC 7 (looked for <DB>.json.7 and asic7/); point --snapshot at the bundle, its dump/ folder, or a folder of dumps

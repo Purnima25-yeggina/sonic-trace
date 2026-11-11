@@ -244,3 +244,58 @@ fn lag_empty() {
         0,
     );
 }
+
+const BUNDLE: &str = "fixtures/bundle";
+
+#[test]
+fn bundle_host_route_without_mask() {
+    check(
+        "bundle_host_route",
+        &["--snapshot", BUNDLE, "route", "10.1.0.32"],
+        0,
+    );
+}
+
+#[test]
+fn bundle_vrf_route() {
+    check(
+        "bundle_vrf_route",
+        &["--snapshot", BUNDLE, "route", "Vrf-red:20.0.0.0/24"],
+        0,
+    );
+}
+
+#[test]
+fn bundle_logs_found_and_gunzipped() {
+    // No log options: the gzip logs in log/ are found and read automatically.
+    check(
+        "bundle_vlan_logs",
+        &["--snapshot", BUNDLE, "vlan", "Vlan8"],
+        1,
+    );
+}
+
+#[test]
+fn bundle_bulk_route_evidence() {
+    check(
+        "bundle_route_mismatch",
+        &["--snapshot", BUNDLE, "route", "40.0.0.0/24"],
+        1,
+    );
+}
+
+#[test]
+fn bundle_second_asic() {
+    check(
+        "bundle_asic1",
+        &[
+            "--snapshot",
+            BUNDLE,
+            "--asic",
+            "1",
+            "route",
+            "10.212.0.0/16",
+        ],
+        0,
+    );
+}

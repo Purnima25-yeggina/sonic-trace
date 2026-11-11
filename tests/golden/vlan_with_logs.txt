@@ -7,7 +7,7 @@ trace: Vlan8
   ASIC_DB      MISSING  SAI VLAN with VLAN_ID=8
 => in APPL_DB but not in ASIC_DB; orchagent has not programmed it (check swss.rec / syslog)
    evidence: members: CONFIG_DB 2, APPL_DB 2, STATE_DB 2, ASIC_DB 0
-   evidence: swss.rec: orchagent last received SET for VLAN_TABLE:Vlan8 at 2026-11-11.10:00:01.000200 (1 records)
+   evidence: swss.rec: orchagent last received SET for VLAN_TABLE:Vlan8 at 2026-11-11.10:00:01.000200 (1 record)
    evidence: sairedis.rec: no SAI call recorded for this object
    evidence: syslog: Nov 11 10:00:01.600000 sonic ERR swss#orchagent: example (synthetic) error mentioning Vlan8
 --- stderr

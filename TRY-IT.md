@@ -120,7 +120,22 @@ Three extra `evidence:` lines appear. The log files are hand-written examples, s
 text is synthetic. The syslog file has errors for `Vlan8` and `Vlan80`; only the `Vlan8`
 one is shown.
 
-## 6. Routes, LAGs and bad input
+## 6. A support bundle, as generate_dump writes it
+
+`fixtures/bundle` copies the layout of a real bundle: `dump/` with one file per database,
+and gzip-compressed logs in `log/`. Its content is synthetic.
+
+```
+ls -R fixtures/bundle
+st --snapshot fixtures/bundle vlan Vlan8                     # logs in log/*.gz are used automatically
+st --snapshot fixtures/bundle route 10.1.0.32                # a host route, written without /32 in APPL_DB
+st --snapshot fixtures/bundle route Vrf-red:20.0.0.0/24      # a route in a VRF
+st --snapshot fixtures/bundle route 20.0.0.0/24              # the default VRF has no such route
+st --snapshot fixtures/bundle route 40.0.0.0/24              # wrong next hop; evidence from a bulk SAI call
+st --snapshot fixtures/bundle --asic 1 route 10.212.0.0/16   # the second chip: dump/<DB>.json.1
+```
+
+## 7. Routes, LAGs and bad input
 
 ```
 st --snapshot ~/trace-lab/community/route route 192.168.0.4/24        # ECMP, 4 next hops

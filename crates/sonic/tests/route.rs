@@ -90,7 +90,10 @@ fn next_hop_mismatch_is_reported() {
     let r = route::trace(&snap, "10.9.0.0/24").unwrap();
     assert_eq!(r.diagnosis.stopped_at.as_deref(), Some("ASIC_NEXTHOP"));
     assert!(
-        r.diagnosis.evidence[0].contains("1.2.3.4") && r.diagnosis.evidence[0].contains("5.6.7.8")
+        r.diagnosis
+            .evidence
+            .iter()
+            .any(|e| e.contains("1.2.3.4") && e.contains("5.6.7.8"))
     );
 }
 

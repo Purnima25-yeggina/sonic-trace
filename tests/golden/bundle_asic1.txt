@@ -1,0 +1,9 @@
+exit: 0
+--- stdout
+trace: 10.212.0.0/16
+  CONFIG_DB    n/a      not a static route
+  APPL_DB      present  ROUTE_TABLE:10.212.0.0/16
+  ASIC_ROUTE   present  ROUTE_ENTRY dest=10.212.0.0/16 vr=oid:0x3000000000002
+  ASIC_NEXTHOP present  NEXT_HOP oid:0x40000000002e7
+=> programmed through every stage
+--- stderr

@@ -1,7 +1,13 @@
 use clap::{Parser, Subcommand};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::ExitCode;
-use trace_sonic::{lag, logs::Logs, port, route, snapshot::Snapshot, vlan};
+use trace_sonic::{
+    lag,
+    logs::Logs,
+    port, route,
+    snapshot::{BundleLayout, Snapshot},
+    vlan,
+};
 
 #[derive(Parser)]
 #[command(
@@ -10,8 +16,8 @@ use trace_sonic::{lag, logs::Logs, port, route, snapshot::Snapshot, vlan};
     about = "Trace a SONiC object through CONFIG_DB, APPL_DB, STATE_DB and ASIC_DB"
 )]
 struct Cli {
-    /// Offline input: a multi-database JSON file, or a directory of per-database dumps
-    /// (`CONFIG_DB.json`, `APPL_DB.json`, `STATE_DB.json`, `ASIC_DB.json`)
+    /// Offline input: a generate_dump bundle (or its dump/ folder), a folder of
+    /// per-database dumps, or one multi-database JSON file
     #[arg(long, required_unless_present = "live", conflicts_with = "live")]
     snapshot: Option<PathBuf>,
     /// Read the databases from this switch by running `sonic-db-dump` for each one
@@ -20,16 +26,16 @@ struct Cli {
     /// Command used by --live
     #[arg(long, default_value = "sonic-db-dump")]
     db_dump_cmd: String,
-    /// Multi-ASIC: use ASIC N (the `asicN` folder of a bundle, or `--netns asicN` live)
+    /// Multi-ASIC: use ASIC N (`<DB>.json.N` in a bundle's dump/ folder, or `--netns asicN` live)
     #[arg(long)]
     asic: Option<u32>,
-    /// orchagent's swss.rec, for evidence (default: swss.rec next to the snapshot)
+    /// orchagent's swss.rec, plain or .gz, for evidence (default: found in the bundle)
     #[arg(long)]
     swss_rec: Option<PathBuf>,
-    /// sairedis.rec, for evidence (default: sairedis.rec next to the snapshot)
+    /// sairedis.rec, plain or .gz, for evidence (default: found in the bundle)
     #[arg(long)]
     sairedis_rec: Option<PathBuf>,
-    /// syslog, for evidence (default: syslog next to the snapshot)
+    /// syslog, plain or .gz, for evidence (default: found in the bundle)
     #[arg(long)]
     syslog: Option<PathBuf>,
     /// Refuse to read more than this many MiB of input in total
@@ -50,41 +56,32 @@ enum Cmd {
     Port { name: String },
     /// Trace a PortChannel, e.g. PortChannel001
     Lag { name: String },
-    /// Trace a route by prefix, e.g. 10.1.1.0/24
+    /// Trace a route, e.g. 10.1.1.0/24, 10.1.0.32 (host route) or Vrf-red:10.1.1.0/24
     Route { prefix: String },
-}
-
-/// An explicit path wins; otherwise use `<dir>/<name>` if it exists.
-fn log_path(explicit: &Option<PathBuf>, dir: Option<&Path>, name: &str) -> Option<PathBuf> {
-    explicit
-        .clone()
-        .or_else(|| dir.map(|d| d.join(name)).filter(|p| p.is_file()))
 }
 
 fn run(cli: Cli) -> Result<bool, String> {
     let mut budget = cli.max_input_mb.saturating_mul(1024 * 1024);
-    let mut dir: Option<PathBuf> = None;
+    let mut layout: Option<BundleLayout> = None;
     let snap = match &cli.snapshot {
         None => Snapshot::from_dump_command(&cli.db_dump_cmd, cli.asic, &mut budget)?,
         Some(path) => {
-            let mut path = path.clone();
-            if let Some(n) = cli.asic {
-                let sub = path.join(format!("asic{n}"));
-                if !sub.is_dir() {
-                    return Err(format!("{}: no asic{n} folder", path.display()));
-                }
-                path = sub;
-            }
             if path.is_dir() {
-                dir = Some(path.clone());
+                layout = Some(BundleLayout::locate(path, cli.asic)?);
             }
-            Snapshot::from_path_budget(&path, &mut budget)?
+            Snapshot::from_path_budget(path, cli.asic, &mut budget)?
         }
     };
+    // An explicit log path wins; otherwise use the bundle's log (plain or .gz), if any.
+    let log = |explicit: &Option<PathBuf>, name: &str| {
+        explicit
+            .clone()
+            .or_else(|| layout.as_ref().and_then(|l| l.log_file(name)))
+    };
     let logs = Logs::load(
-        log_path(&cli.swss_rec, dir.as_deref(), "swss.rec").as_deref(),
-        log_path(&cli.sairedis_rec, dir.as_deref(), "sairedis.rec").as_deref(),
-        log_path(&cli.syslog, dir.as_deref(), "syslog").as_deref(),
+        log(&cli.swss_rec, "swss.rec").as_deref(),
+        log(&cli.sairedis_rec, "sairedis.rec").as_deref(),
+        log(&cli.syslog, "syslog").as_deref(),
         &mut budget,
     )?;
 

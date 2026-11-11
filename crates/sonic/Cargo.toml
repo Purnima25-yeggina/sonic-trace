@@ -10,3 +10,7 @@ workspace = true
 [dependencies]
 trace-core = { path = "../core" }
 serde_json.workspace = true
+flate2 = "1"
+
+[dev-dependencies]
+flate2 = "1"

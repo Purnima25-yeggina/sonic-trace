@@ -1,0 +1,12 @@
+exit: 1
+--- stdout
+trace: 40.0.0.0/24
+  CONFIG_DB    n/a      not a static route
+  APPL_DB      present  ROUTE_TABLE:40.0.0.0/24
+  ASIC_ROUTE   present  ROUTE_ENTRY dest=40.0.0.0/24 vr=oid:0x3000000000002
+  ASIC_NEXTHOP present  NEXT_HOP oid:0x4000000000009
+=> programmed, but the next hops differ from APPL_DB
+   evidence: next hops differ: APPL_DB {10.0.0.1}, ASIC_DB {10.0.0.9}
+   evidence: swss.rec: orchagent last received SET for ROUTE_TABLE:40.0.0.0/24 at 2026-11-11.10:00:05.000200 (1 record)
+   evidence: sairedis.rec: last SAI create (bulk) at 2026-11-11.10:00:04.000000 (1 call; the log records no result)
+--- stderr

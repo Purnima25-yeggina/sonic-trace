@@ -1,0 +1,80 @@
+{
+ "VLAN_MEMBER_TABLE|Vlan3|Ethernet0": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_MEMBER_TABLE|Vlan3|Ethernet8": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_MEMBER_TABLE|Vlan4|Ethernet16": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_MEMBER_TABLE|Vlan4|Ethernet24": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_MEMBER_TABLE|Vlan6|Ethernet32": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_MEMBER_TABLE|Vlan6|Ethernet40": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_MEMBER_TABLE|Vlan8|Ethernet64": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_MEMBER_TABLE|Vlan8|Ethernet72": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_TABLE|Vlan2": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_TABLE|Vlan3": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_TABLE|Vlan4": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_TABLE|Vlan6": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ },
+ "VLAN_TABLE|Vlan8": {
+  "type": "hash",
+  "value": {
+   "state": "ok"
+  }
+ }
+}

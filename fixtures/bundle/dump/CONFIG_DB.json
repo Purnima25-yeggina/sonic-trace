@@ -1,0 +1,110 @@
+{
+ "VLAN_INTERFACE|Vlan4": {
+  "type": "hash",
+  "value": {
+   "NULL": "NULL"
+  }
+ },
+ "VLAN_INTERFACE|Vlan4|192.168.1.2/24": {
+  "type": "hash",
+  "value": {
+   "NULL": "NULL"
+  }
+ },
+ "VLAN_MEMBER|Vlan3|Ethernet0": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan3|Ethernet8": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan4|Ethernet16": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan4|Ethernet24": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan6|Ethernet32": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan6|Ethernet40": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan7|Ethernet48": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan7|Ethernet56": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan8|Ethernet64": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER|Vlan8|Ethernet72": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN|Vlan2": {
+  "type": "hash",
+  "value": {
+   "vlanid": "2"
+  }
+ },
+ "VLAN|Vlan3": {
+  "type": "hash",
+  "value": {
+   "vlanid": "3"
+  }
+ },
+ "VLAN|Vlan4": {
+  "type": "hash",
+  "value": {
+   "vlanid": "4"
+  }
+ },
+ "VLAN|Vlan6": {
+  "type": "hash",
+  "value": {
+   "vlanid": "6"
+  }
+ },
+ "VLAN|Vlan7": {
+  "type": "hash",
+  "value": {
+   "vlanid": "7"
+  }
+ },
+ "VLAN|Vlan8": {
+  "type": "hash",
+  "value": {
+   "vlanid": "8"
+  }
+ }
+}

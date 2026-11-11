@@ -1,0 +1,84 @@
+{
+ "CLASS_BASED_NEXT_HOP_GROUP_TABLE:testcbfnhg": {
+  "type": "hash",
+  "value": {
+   "members": "testnhg",
+   "selection_map": "AZURE"
+  }
+ },
+ "NEXTHOP_GROUP_TABLE:testnhg": {
+  "type": "hash",
+  "value": {
+   "ifname": "Ethernet0",
+   "nexthop": "10.0.0.1"
+  }
+ },
+ "ROUTE_TABLE:1.1.1.0/24": {
+  "type": "hash",
+  "value": {
+   "ifname": "Ethernet0",
+   "nexthop": "0.0.0.0"
+  }
+ },
+ "ROUTE_TABLE:10.0.0.16/16": {
+  "type": "hash",
+  "value": {
+   "nexthop_group": "testnhg"
+  }
+ },
+ "ROUTE_TABLE:10.1.0.32": {
+  "type": "hash",
+  "value": {
+   "ifname": "Loopback0",
+   "nexthop": "0.0.0.0"
+  }
+ },
+ "ROUTE_TABLE:10.1.1.16/16": {
+  "type": "hash",
+  "value": {
+   "nexthop_group": "testcbfnhg"
+  }
+ },
+ "ROUTE_TABLE:10.212.0.0/16": {
+  "type": "hash",
+  "value": {
+   "ifname": "Ethernet0",
+   "nexthop": "1.1.1.2"
+  }
+ },
+ "ROUTE_TABLE:192.168.0.10/22": {
+  "type": "hash",
+  "value": {
+   "ifname": "PortChannel0001,PortChannel0002,PortChannel0003,PortChannel0004",
+   "nexthop": "fc00::72,fc00::76,fc00::7a,fc00::7e"
+  }
+ },
+ "ROUTE_TABLE:192.168.0.4/24": {
+  "type": "hash",
+  "value": {
+   "ifname": "PortChannel0001,PortChannel0002,PortChannel0003,PortChannel0004",
+   "nexthop": "fc00::72,fc00::76,fc00::7a,fc00::7e"
+  }
+ },
+ "ROUTE_TABLE:20.0.0.0/24": {
+  "type": "hash",
+  "value": {
+   "ifname": "Ethernet0",
+   "nexthop": "1.1.1.2"
+  }
+ },
+ "ROUTE_TABLE:20c0:e6e0:0:80::/64": {
+  "type": "hash",
+  "value": {
+   "ifname": "PortChannel0001,PortChannel0002,PortChannel0003,PortChannel0004",
+   "nexthop": "fc00::72,fc00::76,fc00::7a,fc00::7e"
+  }
+ },
+ "ROUTE_TABLE:fe80::/64": {
+  "type": "hash",
+  "value": {
+   "ifname": "Loopback0",
+   "nexthop": "::"
+  }
+ }
+}

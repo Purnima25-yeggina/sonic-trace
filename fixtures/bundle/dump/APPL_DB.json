@@ -1,0 +1,133 @@
+{
+ "INTF_TABLE:Ethernet0": {
+  "type": "hash",
+  "value": {}
+ },
+ "INTF_TABLE:Ethernet4": {
+  "type": "hash",
+  "value": {
+   "vrf_name": "Vrf-red"
+  }
+ },
+ "ROUTE_TABLE:10.1.0.32": {
+  "type": "hash",
+  "value": {
+   "ifname": "Ethernet0",
+   "nexthop": "10.0.0.1"
+  }
+ },
+ "ROUTE_TABLE:30.0.0.0/24": {
+  "type": "hash",
+  "value": {
+   "ifname": "Ethernet0",
+   "nexthop": "10.0.0.1"
+  }
+ },
+ "ROUTE_TABLE:40.0.0.0/24": {
+  "type": "hash",
+  "value": {
+   "ifname": "Ethernet0",
+   "nexthop": "10.0.0.1"
+  }
+ },
+ "ROUTE_TABLE:Vrf-red:20.0.0.0/24": {
+  "type": "hash",
+  "value": {
+   "ifname": "Ethernet4",
+   "nexthop": "10.0.0.9"
+  }
+ },
+ "VLAN_MEMBER_TABLE:Vlan3:Ethernet0": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER_TABLE:Vlan3:Ethernet8": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER_TABLE:Vlan4:Ethernet16": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER_TABLE:Vlan4:Ethernet24": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER_TABLE:Vlan7:Ethernet48": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER_TABLE:Vlan7:Ethernet56": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER_TABLE:Vlan8:Ethernet64": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_MEMBER_TABLE:Vlan8:Ethernet72": {
+  "type": "hash",
+  "value": {
+   "tagging_mode": "tagged"
+  }
+ },
+ "VLAN_TABLE:Vlan2": {
+  "type": "hash",
+  "value": {
+   "admin_status": "up",
+   "host_ifname": "",
+   "mac": "7c:fe:90:f5:36:40",
+   "mtu": "9100"
+  }
+ },
+ "VLAN_TABLE:Vlan3": {
+  "type": "hash",
+  "value": {
+   "admin_status": "up",
+   "host_ifname": "",
+   "mac": "7c:fe:90:f5:36:40",
+   "mtu": "9100"
+  }
+ },
+ "VLAN_TABLE:Vlan4": {
+  "type": "hash",
+  "value": {
+   "admin_status": "up",
+   "host_ifname": "",
+   "mac": "7c:fe:90:f5:36:40",
+   "mtu": "9100"
+  }
+ },
+ "VLAN_TABLE:Vlan7": {
+  "type": "hash",
+  "value": {
+   "admin_status": "up",
+   "host_ifname": "",
+   "mac": "7c:fe:90:f5:36:40",
+   "mtu": "9100"
+  }
+ },
+ "VLAN_TABLE:Vlan8": {
+  "type": "hash",
+  "value": {
+   "admin_status": "up",
+   "host_ifname": "",
+   "mac": "7c:fe:90:f5:36:40",
+   "mtu": "9100"
+  }
+ }
+}
