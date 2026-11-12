@@ -10,7 +10,7 @@ use crate::logs::Logs;
 use crate::snapshot::{Fields, Snapshot};
 use serde_json::Value;
 use std::collections::BTreeSet;
-use std::net::IpAddr;
+use std::net::{IpAddr, Ipv6Addr};
 use trace_core::{Diagnosis, Presence, Report, Stage, StageResult};
 
 const ROUTE: &str = "ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY:";
@@ -219,6 +219,29 @@ fn default_vr(snap: &Snapshot) -> Option<String> {
     }
 }
 
+/// Whether `addr` is an IPv6 link-local address (`fe80::/10`).
+fn is_link_local(addr: &str) -> bool {
+    addr.parse::<Ipv6Addr>()
+        .is_ok_and(|a| a.segments().first().is_some_and(|s| s & 0xffc0 == 0xfe80))
+}
+
+/// Whether ASIC_DB has the `fe80::/10` route that orchagent creates in each virtual router
+/// (routeorch for the default VRF, vrforch for the others) to send link-local traffic to
+/// the CPU. `vrs` limits the search to those virtual routers, when known.
+fn has_link_local_cpu_route(snap: &Snapshot, vrs: Option<&BTreeSet<String>>) -> bool {
+    snap.iter("ASIC_DB").any(|(k, _)| {
+        let Some(json) = k.strip_prefix(ROUTE) else {
+            return false;
+        };
+        let Ok(v) = serde_json::from_str::<Value>(json) else {
+            return false;
+        };
+        let vr = v.get("vr").and_then(Value::as_str).unwrap_or("");
+        v.get("dest").and_then(Value::as_str) == Some("fe80::/10")
+            && vrs.is_none_or(|set| set.contains(vr))
+    })
+}
+
 /// Virtual-router OIDs that belong to `vrf`. SAI objects carry no VRF name, so this goes
 /// through the VRF's interfaces: `INTF_TABLE:<ifname>` with `vrf_name` in APPL_DB, the
 /// interface's ASIC object (port, VLAN or LAG), and the router interface built on it.
@@ -407,6 +430,11 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, target: &str) -> Result<Report, 
         (Some(_), Some(oid), Some(t)) => (Presence::Present, format!("{} {oid}", t.kind)),
         (Some(_), Some(oid), None) => (Presence::Missing, format!("dangling next-hop {oid}")),
     };
+    // orchagent does not program link-local routes from APPL_DB one by one: a single
+    // fe80::/10 route to the CPU per virtual router covers them, and route_check.py skips
+    // them for the same reason. `Some(covered)` when that applies to this trace.
+    let link_local = (app.is_some() && asic.is_none() && is_link_local(&route.addr))
+        .then(|| has_link_local_cpu_route(snap, wanted.as_ref()));
     let primary_app = app_keys.first().cloned().unwrap_or_default();
     let stages = vec![
         StageResult {
@@ -427,10 +455,16 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, target: &str) -> Result<Report, 
         },
         StageResult {
             stage: stage("ASIC_ROUTE", "orchagent"),
-            presence: pres(asic.is_some()),
-            detail: asic
-                .map(|(_, vr)| format!("ROUTE_ENTRY dest={dest} vr={vr}"))
-                .unwrap_or_else(|| format!("SAI route entry for {dest}")),
+            presence: if link_local == Some(true) {
+                Presence::NotApplicable
+            } else {
+                pres(asic.is_some())
+            },
+            detail: match (asic, link_local) {
+                (Some((_, vr)), _) => format!("ROUTE_ENTRY dest={dest} vr={vr}"),
+                (None, Some(true)) => "link-local: covered by the fe80::/10 CPU route".to_string(),
+                (None, _) => format!("SAI route entry for {dest}"),
+            },
         },
         StageResult {
             stage: stage("ASIC_NEXTHOP", "orchagent"),
@@ -447,6 +481,14 @@ pub fn trace_with(snap: &Snapshot, logs: &Logs, target: &str) -> Result<Report, 
             } else {
                 format!("{} was not found in CONFIG_DB, APPL_DB or ASIC_DB", route.display())
             },
+        ),
+        (Some(_), None) if link_local == Some(true) => (
+            None,
+            "link-local route: orchagent sends all of fe80::/10 to the CPU instead of programming each one (normal)".to_string(),
+        ),
+        (Some(_), None) if link_local == Some(false) => (
+            Some("ASIC_DB"),
+            "link-local route, but this VRF has no fe80::/10 route to the CPU in ASIC_DB (orchagent creates one per VRF)".to_string(),
         ),
         (Some((_, f)), None) => {
             if let Some(g) = f.get("nexthop_group") {

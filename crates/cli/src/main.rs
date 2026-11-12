@@ -2,8 +2,8 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use trace_sonic::{
-    lag,
-    logs::Logs,
+    archive, check, lag,
+    logs::{LogSource, Logs},
     port, route,
     snapshot::{BundleLayout, Snapshot},
     vlan,
@@ -16,8 +16,8 @@ use trace_sonic::{
     about = "Trace a SONiC object through CONFIG_DB, APPL_DB, STATE_DB and ASIC_DB"
 )]
 struct Cli {
-    /// Offline input: a generate_dump bundle (or its dump/ folder), a folder of
-    /// per-database dumps, or one multi-database JSON file
+    /// Offline input: a generate_dump archive (sonic_dump_*.tar.gz) or unpacked bundle
+    /// (or its dump/ folder), a folder of per-database dumps, or one multi-database JSON file
     #[arg(long, required_unless_present = "live", conflicts_with = "live")]
     snapshot: Option<PathBuf>,
     /// Read the databases from this switch by running `sonic-db-dump` for each one
@@ -58,12 +58,37 @@ enum Cmd {
     Lag { name: String },
     /// Trace a route, e.g. 10.1.1.0/24, 10.1.0.32 (host route) or Vrf-red:10.1.1.0/24
     Route { prefix: String },
+    /// Trace every VLAN, port, LAG and route in the snapshot; list what passed and failed
+    Check {
+        /// Also print the full trace of each failed object
+        #[arg(long)]
+        details: bool,
+    },
 }
 
 fn run(cli: Cli) -> Result<bool, String> {
     let mut budget = cli.max_input_mb.saturating_mul(1024 * 1024);
     let mut layout: Option<BundleLayout> = None;
-    let snap = match &cli.snapshot {
+    // A .tar.gz bundle is unpacked (dumps and logs only) into a private temporary folder,
+    // removed when `_unpacked` goes out of scope at the end of this function.
+    let unpacked = match &cli.snapshot {
+        Some(p) if archive::is_archive(p) => Some(archive::extract_bundle(p, budget)?),
+        _ => None,
+    };
+    if let Some(u) = &unpacked
+        && u.skipped_logs > 0
+    {
+        eprintln!(
+            "note: {} log files in the archive were not read (size limit, raise --max-input-mb)",
+            u.skipped_logs
+        );
+    }
+    let input = unpacked
+        .as_ref()
+        .map(|u| u.path().to_path_buf())
+        .or_else(|| cli.snapshot.clone());
+    let _unpacked = unpacked;
+    let snap = match &input {
         None => Snapshot::from_dump_command(&cli.db_dump_cmd, cli.asic, &mut budget)?,
         Some(path) => {
             if path.is_dir() {
@@ -72,24 +97,45 @@ fn run(cli: Cli) -> Result<bool, String> {
             Snapshot::from_path_budget(path, cli.asic, &mut budget)?
         }
     };
-    // An explicit log path wins; otherwise use the bundle's log (plain or .gz), if any.
-    let log = |explicit: &Option<PathBuf>, name: &str| {
-        explicit
-            .clone()
-            .or_else(|| layout.as_ref().and_then(|l| l.log_file(name)))
+    // An explicit log path wins and is read alone; otherwise use the bundle's log (plain
+    // or .gz) and its rotations (.1, .2, ...), if any.
+    let log = |explicit: &Option<PathBuf>, name: &str| match explicit {
+        Some(p) => (Some(p.clone()), Vec::new()),
+        None => layout.as_ref().map_or((None, Vec::new()), |l| {
+            (l.log_file(name), l.log_rotations(name))
+        }),
     };
-    let logs = Logs::load(
-        log(&cli.swss_rec, "swss.rec").as_deref(),
-        log(&cli.sairedis_rec, "sairedis.rec").as_deref(),
-        log(&cli.syslog, "syslog").as_deref(),
-        &mut budget,
-    )?;
+    let (swss, sairedis, syslog) = (
+        log(&cli.swss_rec, "swss.rec"),
+        log(&cli.sairedis_rec, "sairedis.rec"),
+        log(&cli.syslog, "syslog"),
+    );
+    fn src((cur, rot): &(Option<PathBuf>, Vec<PathBuf>)) -> LogSource<'_> {
+        LogSource {
+            current: cur.as_deref(),
+            rotations: rot,
+        }
+    }
+    let logs = Logs::load_sources(src(&swss), src(&sairedis), src(&syslog), &mut budget)?;
 
+    if let Cmd::Check { details } = cli.cmd {
+        let result = check::run(&snap, &logs);
+        if cli.json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).map_err(|e| e.to_string())?
+            );
+        } else {
+            print!("{}", result.render_text(details));
+        }
+        return Ok(result.all_passed());
+    }
     let report = match &cli.cmd {
         Cmd::Vlan { name } => vlan::trace_with(&snap, &logs, name)?,
         Cmd::Port { name } => port::trace_with(&snap, &logs, name)?,
         Cmd::Lag { name } => lag::trace_with(&snap, &logs, name)?,
         Cmd::Route { prefix } => route::trace_with(&snap, &logs, prefix)?,
+        Cmd::Check { .. } => return Err("unreachable: check is handled above".into()),
     };
     if cli.json {
         println!(

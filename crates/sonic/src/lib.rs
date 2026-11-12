@@ -1,4 +1,6 @@
 //! SONiC adapter: snapshot parsing and object traces.
+pub mod archive;
+pub mod check;
 pub mod lag;
 pub mod logs;
 pub mod port;

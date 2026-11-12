@@ -46,6 +46,59 @@ sonic-trace --snapshot fixtures/community/vlan vlan Vlan8
 
 **Options go before the command.** `sonic-trace vlan Vlan8 --snapshot dir` is rejected.
 
+### Check a whole dump at once
+
+`check` traces every VLAN, port, LAG and route in the snapshot and lists what failed,
+then what passed, then a summary. It takes the `generate_dump` archive as is; there is
+no need to unpack it.
+
+```
+sonic-trace --snapshot sonic_dump_sw1_20261111_120000.tar.gz check
+sonic-trace --snapshot sonic_dump_sw1_20261111_120000.tar.gz check --details   # full trace of each failure
+sonic-trace --snapshot sonic_dump_sw1_20261111_120000.tar.gz check | grep ^FAIL  # failures only
+```
+
+On the synthetic bundle in `fixtures/bundle`:
+
+```
+FAILED (4)
+FAIL vlan  Vlan6                stopped at APPL_DB: configured and STATE_DB says ok, but APPL_DB has no entry: the databases disagree
+FAIL vlan  Vlan8                stopped at ASIC_DB: in APPL_DB but not in ASIC_DB; orchagent has not programmed it (check swss.rec / syslog)
+FAIL route 30.0.0.0/24          stopped at ASIC_DB: in APPL_DB but not in ASIC_DB; orchagent has not programmed it (check swss.rec / syslog)
+FAIL route 40.0.0.0/24          stopped at ASIC_NEXTHOP: programmed, but the next hops differ from APPL_DB
+
+PASSED (6)
+PASS vlan  Vlan2                programmed through every stage
+PASS vlan  Vlan3                programmed through every stage
+PASS vlan  Vlan4                programmed through every stage
+PASS vlan  Vlan7                programmed in ASIC_DB, but vlanmgrd has not reported state=ok in STATE_DB
+PASS route 10.1.0.32/32         programmed through every stage
+PASS route Vrf-red:20.0.0.0/24  programmed through every stage
+
+SUMMARY
+  type    total  passed  failed  error
+  vlan        6       4       2      0
+  port        0       0       0      0
+  lag         0       0       0      0
+  route       4       2       2      0
+  all        10       6       4      0
+=> some objects did not pass; trace one for details, e.g. sonic-trace --snapshot <bundle> route <prefix>
+```
+
+- Objects come from the dump itself: `VLAN|`, `PORT|`, `PORTCHANNEL|` and `STATIC_ROUTE|`
+  in CONFIG_DB, and `ROUTE_TABLE:` in APPL_DB. A route found under two names (a host
+  route with and without its mask, or a static route and its APPL_DB entry) is traced once.
+- A `PASS` line can still carry a note, as `Vlan7` does above: the object is programmed,
+  but something along the way looks off.
+- `ERR` lines are objects the tool found but could not trace, such as a key in a format it
+  does not know. They are counted in the `error` column.
+- Exit code: `0` when every object passed, `1` otherwise. `--json` gives one entry per
+  object, with its full trace.
+- A `.tar.gz` is read without unpacking it in place: only `dump/<DB>.json*` and the
+  `swss.rec`, `sairedis.rec` and `syslog` logs are taken out, into a private temporary
+  folder that is removed when the tool exits. Paths inside the archive are never used as
+  output paths.
+
 ### Commands and what to give them
 
 | Command | Target to give | Examples | Rejected |
@@ -53,6 +106,7 @@ sonic-trace --snapshot fixtures/community/vlan vlan Vlan8
 | `vlan` | `Vlan` followed by a number from 1 to 4094 | `Vlan8`, `Vlan100` | `Vlan0`, `Vlan4095`, `vlan8` (case matters), `8` |
 | `port` | `Ethernet` followed by a number | `Ethernet0`, `Ethernet160` | `eth0`, `Ethernet` |
 | `lag` | `PortChannel` followed by digits | `PortChannel001`, `PortChannel1` | `PortChannel`, `Po1` |
+| `check` | nothing; add `--details` for the full trace of each failure | `check`, `check --details` | |
 | `route` | `[<VRF>:]<address>[/<mask>]` | `10.0.0.16/16`, `fe80::/64`, `10.1.0.32` (host route), `Vrf-red:20.0.0.0/24` | `10.0.0.0/33`, `1.2.3`, `Vrf:1.1.1.0/24` |
 
 Route targets in more detail:
@@ -98,8 +152,9 @@ sonic_dump_<host>_<date>/
     ...
   log/
     swss.rec.gz         logs are gzip-compressed; used for evidence if present
-    sairedis.rec.gz
-    syslog.gz
+    swss.rec.1.gz ...   older rotations (.1 is the newest); read too
+    sairedis.rec.gz, sairedis.rec.N.gz
+    syslog.gz, syslog.N.gz
 ```
 
 You can also point it at the `dump/` folder, or at any folder of per-database files
@@ -123,6 +178,8 @@ for example CONFIG_DB for a route learned from BGP).
 ### More examples
 
 ```
+sonic-trace --snapshot sonic_dump_sw1_20261111_120000.tar.gz check
+sonic-trace --snapshot sonic_dump_sw1_20261111_120000.tar.gz route 10.1.0.32
 sonic-trace --snapshot sonic_dump_sw1_20261111/ port Ethernet160
 sonic-trace --snapshot sonic_dump_sw1_20261111/ lag PortChannel001
 sonic-trace --snapshot sonic_dump_sw1_20261111/ route 10.1.0.32
@@ -206,7 +263,16 @@ sonic-trace --live route 10.1.1.0/24                       # runs sonic-db-dump 
 
 - When an object stops at a stage, the tool adds evidence from the logs. In a bundle,
   `log/swss.rec.gz`, `log/sairedis.rec.gz` and `log/syslog.gz` are found and decompressed
-  automatically. Syslog lines match whole words only (`Vlan8` does not match `Vlan80`).
+  automatically, together with their rotations (`swss.rec.1.gz`, `swss.rec.2.gz`, ...),
+  read oldest first. A file given with `--swss-rec` and the like is read on its own.
+- Rotations can be large. The current files must fit in `--max-input-mb`; what is left is
+  shared between the three logs' rotations, newest first. A "no record" line says what it
+  checked, e.g. `(checked 3 files from 2000-01-01.10:00:00; 5 older rotations not read
+  (size limit, raise --max-input-mb))`, so a missing record is never claimed for a period
+  the tool did not read.
+- Syslog lines match whole words only (`Vlan8` does not match `Vlan80`). rsyslog's `#012`
+  newline escapes are flattened, long messages are shortened around the match, and a
+  message repeated many times is shown once with a count (`seen 12 times`).
 - `sairedis.rec` has two kinds of record: single calls (`c`, `r`, `s`) and bulk calls
   (`C`, `R`, `S`, many objects on one line). Routes are usually created in bulk; both
   kinds are read.
@@ -266,6 +332,10 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
 - A route on the ASIC through a next hop but with no APPL_DB entry is reported as a
   possible stale route; one through a router interface or the CPU port is treated as a
   normal connected or local route.
+- Link-local IPv6 routes (`fe80::/10`) in APPL_DB are not programmed one by one:
+  orchagent sends all of `fe80::/10` to the CPU with one route per VRF, and
+  `route_check.py` skips them. The tool reports them as normal when that CPU route
+  exists, and flags them when it is missing.
 - ASIC member ports are compared by count, because ASIC_DB stores OIDs.
 - Memory: the size limit bounds what is read, not what is held. In a test with a
   synthetic 300,000-route dump (80 MB of JSON), a lookup took about 1.7 seconds and
@@ -289,8 +359,8 @@ Not done yet:
 - A consistent live snapshot (today the databases are dumped one after another).
 - Longer fuzzing runs in CI.
 
-Ideas, not commitments: a comparison of two dumps, and a CI mode that fails when an
-object is stuck.
+Ideas, not commitments: a comparison of two dumps. (A CI gate that fails when an object
+is stuck is now `check`, which exits 1 when anything did not pass.)
 
 ## Contributing
 

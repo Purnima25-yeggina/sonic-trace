@@ -7,7 +7,8 @@
 //!   (routeorch creates routes through the bulk API, so routes usually appear here)
 //!
 //! `generate_dump` stores logs gzip-compressed (`log/swss.rec.gz`); those are
-//! decompressed transparently.
+//! decompressed transparently. Rotated copies (`swss.rec.1.gz`, ...) are read too, oldest
+//! first, so a "no record" result covers the whole bundle, and says which window it covers.
 //!
 //! `sairedis.rec` does not record a status for single create calls, so it can show
 //! that a SAI call was made, not that it succeeded.
@@ -16,9 +17,163 @@ use std::path::Path;
 
 #[derive(Debug, Default)]
 pub struct Logs {
-    swss: Option<String>,
-    sairedis: Option<String>,
-    syslog: Option<String>,
+    swss: Option<LogText>,
+    sairedis: Option<LogText>,
+    syslog: Option<LogText>,
+}
+
+/// One log's text, with its rotations joined oldest first, and what was read.
+#[derive(Debug, Default)]
+struct LogText {
+    text: String,
+    /// Files read, including rotations.
+    files: usize,
+    /// Older rotations left unread because of the size limit.
+    skipped: usize,
+}
+
+impl LogText {
+    fn single(text: String) -> Self {
+        Self {
+            text,
+            files: 1,
+            skipped: 0,
+        }
+    }
+
+    /// What a "not found" result covers, e.g. `4 files from 2026-01-01.10:00:00`.
+    /// `.rec` lines start with their timestamp; syslog's is not parsed.
+    fn coverage(&self, with_ts: bool) -> String {
+        let mut s = plural(self.files, "file");
+        if with_ts
+            && let Some(ts) = self
+                .text
+                .lines()
+                .find_map(|l| l.split('|').next().filter(|t| !t.is_empty()))
+        {
+            s.push_str(&format!(" from {ts}"));
+        }
+        if self.skipped > 0 {
+            s.push_str(&format!(
+                "; {} not read (size limit, raise --max-input-mb)",
+                plural(self.skipped, "older rotation")
+            ));
+        }
+        s
+    }
+}
+
+/// Where to read one log from: the current file and its rotations, newest first
+/// (`.1`, `.2`, ...), as [`crate::snapshot::BundleLayout::log_rotations`] returns them.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LogSource<'a> {
+    pub current: Option<&'a Path>,
+    pub rotations: &'a [std::path::PathBuf],
+}
+
+impl<'a> LogSource<'a> {
+    pub fn file(current: Option<&'a Path>) -> Self {
+        Self {
+            current,
+            rotations: &[],
+        }
+    }
+}
+
+/// Read one log. The current file must fit in `budget`; rotations are read newest first
+/// while they fit in `rotation_budget` (and `budget`), and the rest are counted as skipped.
+fn read_source(
+    src: LogSource,
+    budget: &mut u64,
+    rotation_budget: u64,
+) -> Result<Option<LogText>, String> {
+    let mut parts = Vec::new();
+    if let Some(p) = src.current {
+        parts.push(read_capped(p, budget)?);
+    }
+    let mut share = rotation_budget.min(*budget);
+    let mut skipped = 0;
+    for (i, p) in src.rotations.iter().enumerate() {
+        let before = share;
+        match read_capped(p, &mut share) {
+            Ok(t) => {
+                *budget -= before - share;
+                parts.push(t);
+            }
+            Err(_) => {
+                skipped = src.rotations.len() - i;
+                break;
+            }
+        }
+    }
+    if parts.is_empty() {
+        return Ok(None);
+    }
+    let files = parts.len();
+    // Current first, then .1, .2, ...: reverse to get chronological order.
+    parts.reverse();
+    let mut text = String::new();
+    for t in parts {
+        text.push_str(&t);
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+    }
+    Ok(Some(LogText {
+        text,
+        files,
+        skipped,
+    }))
+}
+
+/// Longest syslog message shown in evidence, in characters.
+const SYSLOG_MAX: usize = 200;
+
+/// Make a syslog line readable: rsyslog escapes newlines as `#012`, and some daemons log
+/// whole JSON documents on one line. Returns (key for de-duplication, display text). The
+/// header (`<time> <host> <LEVEL> proc[pid]: `) is kept; a long message is shortened,
+/// starting at its beginning when the first matching token is near it, else around it.
+/// The key is the shortened message without the header, so repeats differing only in
+/// time or pid collapse into one.
+fn tidy_syslog(line: &str, tokens: &[&str]) -> (String, String) {
+    let flat = line.replace("#012", " ").replace("#011", " ");
+    let flat = flat.split_whitespace().collect::<Vec<_>>().join(" ");
+    let (head, msg) = match flat
+        .find("]: ")
+        .map(|i| i + 3)
+        .or_else(|| flat.find(": ").map(|i| i + 2))
+    {
+        Some(i) => flat.split_at(i),
+        None => ("", flat.as_str()),
+    };
+    let chars: Vec<char> = msg.chars().collect();
+    let shown = if chars.len() <= SYSLOG_MAX {
+        msg.to_string()
+    } else {
+        // Character position of the first token, so the window shows why it matched.
+        let at = tokens
+            .iter()
+            .filter_map(|t| msg.find(t))
+            .min()
+            .map_or(0, |b| msg.get(..b).map_or(0, |s| s.chars().count()));
+        let start = if at + 40 <= SYSLOG_MAX {
+            0
+        } else {
+            at.saturating_sub(SYSLOG_MAX / 3)
+        };
+        let end = (start + SYSLOG_MAX).min(chars.len());
+        let start = end.saturating_sub(SYSLOG_MAX);
+        let mut s: String = chars.get(start..end).unwrap_or_default().iter().collect();
+        if start > 0 {
+            s.insert(0, '…');
+        }
+        if end < chars.len() {
+            s.push('…');
+        }
+        s
+    };
+    let shown_head = format!("{head}{shown}");
+    (shown, shown_head)
 }
 
 /// One SAI call for one object, from a single or a bulk `sairedis.rec` line.
@@ -142,17 +297,65 @@ impl Logs {
         syslog: Option<&Path>,
         budget: &mut u64,
     ) -> Result<Self, String> {
-        let mut read = |p: Option<&Path>| p.map(|p| read_capped(p, budget)).transpose();
-        Ok(Self {
-            swss: read(swss)?,
-            sairedis: read(sairedis)?,
-            syslog: read(syslog)?,
-        })
+        Self::load_sources(
+            LogSource::file(swss),
+            LogSource::file(sairedis),
+            LogSource::file(syslog),
+            budget,
+        )
+    }
+
+    /// Like [`Logs::load`], also reading rotated logs. The current files must fit in
+    /// `budget`; each log's rotations get an equal share of what is left after them.
+    pub fn load_sources(
+        swss: LogSource,
+        sairedis: LogSource,
+        syslog: LogSource,
+        budget: &mut u64,
+    ) -> Result<Self, String> {
+        fn current_only(s: LogSource<'_>) -> LogSource<'_> {
+            LogSource::file(s.current)
+        }
+        let mut logs = Self {
+            swss: read_source(current_only(swss), budget, 0)?,
+            sairedis: read_source(current_only(sairedis), budget, 0)?,
+            syslog: read_source(current_only(syslog), budget, 0)?,
+        };
+        let share = *budget / 3;
+        for (slot, src) in [
+            (&mut logs.swss, swss),
+            (&mut logs.sairedis, sairedis),
+            (&mut logs.syslog, syslog),
+        ] {
+            if src.rotations.is_empty() {
+                continue;
+            }
+            let older = LogSource {
+                current: None,
+                rotations: src.rotations,
+            };
+            if let Some(old) = read_source(older, budget, share)? {
+                let cur = slot.take();
+                let mut text = old.text;
+                if let Some(c) = &cur {
+                    text.push_str(&c.text);
+                }
+                *slot = Some(LogText {
+                    text,
+                    files: old.files + cur.as_ref().map_or(0, |c| c.files),
+                    skipped: old.skipped,
+                });
+            } else if let Some(c) = slot.as_mut() {
+                c.skipped = src.rotations.len();
+            }
+        }
+        Ok(logs)
     }
 
     /// Build from in-memory bytes (used by fuzzing and tests); invalid UTF-8 is replaced.
     pub fn from_bytes(swss: Option<&[u8]>, sairedis: Option<&[u8]>, syslog: Option<&[u8]>) -> Self {
-        let text = |b: Option<&[u8]>| b.map(|b| String::from_utf8_lossy(b).into_owned());
+        let text =
+            |b: Option<&[u8]>| b.map(|b| LogText::single(String::from_utf8_lossy(b).into_owned()));
         Self {
             swss: text(swss),
             sairedis: text(sairedis),
@@ -179,8 +382,9 @@ impl Logs {
         let mut out = Vec::new();
         let shown = swss_keys.first().copied().unwrap_or("");
 
-        if let Some(text) = &self.swss {
-            let events: Vec<(&str, &str, &str)> = text
+        if let Some(log) = &self.swss {
+            let events: Vec<(&str, &str, &str)> = log
+                .text
                 .lines()
                 .filter_map(|l| {
                     let mut it = l.split('|');
@@ -189,7 +393,10 @@ impl Logs {
                 })
                 .collect();
             out.push(match events.last() {
-                None => format!("swss.rec: no record of orchagent receiving {shown}"),
+                None => format!(
+                    "swss.rec: no record of orchagent receiving {shown} (checked {})",
+                    log.coverage(true)
+                ),
                 Some((ts, key, op)) => format!(
                     "swss.rec: orchagent last received {op} for {key} at {ts} ({})",
                     plural(events.len(), "record")
@@ -197,14 +404,18 @@ impl Logs {
             });
         }
 
-        if let (Some(text), Some(sai_match)) = (&self.sairedis, sai_match) {
-            let events: Vec<SaiRec> = text
+        if let (Some(log), Some(sai_match)) = (&self.sairedis, sai_match) {
+            let events: Vec<SaiRec> = log
+                .text
                 .lines()
                 .flat_map(parse_sairedis_line)
                 .filter(|r| sai_match(r))
                 .collect();
             out.push(match events.last() {
-                None => "sairedis.rec: no SAI call recorded for this object".to_string(),
+                None => format!(
+                    "sairedis.rec: no SAI call recorded for this object (checked {})",
+                    log.coverage(true)
+                ),
                 Some(r) => {
                     let what = match r.op {
                         'c' => "create",
@@ -221,22 +432,30 @@ impl Logs {
             });
         }
 
-        if let Some(text) = &self.syslog {
-            let hits: Vec<&str> = text
-                .lines()
-                .filter(|l| {
-                    [" ERR ", " ERROR ", " WARNING ", " CRIT "]
-                        .iter()
-                        .any(|s| l.contains(s))
-                        && tokens.iter().any(|t| has_word(l, t))
-                })
-                .collect();
-            let skip = hits.len().saturating_sub(3);
-            out.extend(
-                hits.iter()
-                    .skip(skip)
-                    .map(|l| format!("syslog: {}", l.trim())),
-            );
+        if let Some(log) = &self.syslog {
+            // Distinct messages, in order of their last appearance, with a repeat count.
+            let mut seen: Vec<(String, String, usize)> = Vec::new();
+            for l in log.text.lines().filter(|l| {
+                [" ERR ", " ERROR ", " WARNING ", " CRIT "]
+                    .iter()
+                    .any(|s| l.contains(s))
+                    && tokens.iter().any(|t| has_word(l, t))
+            }) {
+                let (msg, shown) = tidy_syslog(l.trim(), tokens);
+                let count = match seen.iter().position(|(m, _, _)| *m == msg) {
+                    Some(i) => seen.remove(i).2 + 1,
+                    None => 1,
+                };
+                seen.push((msg, shown, count));
+            }
+            let skip = seen.len().saturating_sub(3);
+            out.extend(seen.iter().skip(skip).map(|(_, shown, n)| {
+                if *n > 1 {
+                    format!("syslog: {shown} (seen {n} times; last shown)")
+                } else {
+                    format!("syslog: {shown}")
+                }
+            }));
         }
         out
     }

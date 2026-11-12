@@ -125,6 +125,30 @@ impl BundleLayout {
             .into_iter()
             .find(|p| p.is_file())
     }
+
+    /// Rotated copies of a log, `<name>.N` or `<name>.N.gz` (logrotate's naming), newest
+    /// first: `.1` is the most recent rotation.
+    pub fn log_rotations(&self, name: &str) -> Vec<PathBuf> {
+        let Some(dir) = self.log_dir.as_ref() else {
+            return Vec::new();
+        };
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return Vec::new();
+        };
+        let mut found: Vec<(u32, PathBuf)> = entries
+            .flatten()
+            .filter_map(|e| {
+                let file = e.file_name();
+                let rest = file.to_str()?.strip_prefix(name)?.strip_prefix('.')?;
+                let n = rest.strip_suffix(".gz").unwrap_or(rest);
+                let n: u32 = n.parse().ok()?;
+                let path = e.path();
+                path.is_file().then_some((n, path))
+            })
+            .collect();
+        found.sort();
+        found.into_iter().map(|(_, p)| p).collect()
+    }
 }
 
 const LOG_NAMES: [&str; 3] = ["swss.rec", "sairedis.rec", "syslog"];
