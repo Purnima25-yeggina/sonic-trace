@@ -76,6 +76,35 @@ impl CheckReport {
         self.entries.iter().all(|e| e.status == Status::Passed)
     }
 
+    /// Text for `<kind> all`: the full trace of every object, one after another, then a
+    /// one-line count.
+    pub fn render_all(&self, kind: Kind) -> String {
+        let mut out = String::new();
+        for e in &self.entries {
+            match (&e.report, &e.error) {
+                (Some(r), _) => out.push_str(&r.render_text()),
+                (None, Some(err)) => {
+                    out.push_str(&format!("trace: {}\n=> could not trace: {err}\n", e.object))
+                }
+                (None, None) => {}
+            }
+            out.push('\n');
+        }
+        let name = kind.name();
+        if self.entries.is_empty() {
+            out.push_str(&format!("no {name} objects found in the snapshot\n"));
+        } else {
+            out.push_str(&format!(
+                "{} {name} objects: {} passed, {} failed, {} could not be traced\n",
+                self.entries.len(),
+                self.count(None, Status::Passed),
+                self.count(None, Status::Failed),
+                self.count(None, Status::Error),
+            ));
+        }
+        out
+    }
+
     /// Text report: failed objects (with where they stopped and why), then passed
     /// objects, then a table of counts. One object per line, so it can be grepped.
     pub fn render_text(&self, details: bool) -> String {
@@ -211,9 +240,17 @@ fn trace_one(snap: &Snapshot, logs: &Logs, kind: Kind, name: &str) -> Result<Rep
 /// Trace every object in the snapshot. Log evidence is only gathered for objects that
 /// stopped at a stage, as in a single trace.
 pub fn run(snap: &Snapshot, logs: &Logs) -> CheckReport {
+    run_kind(snap, logs, None)
+}
+
+/// Like [`run`], limited to one kind of object when `only` is set (`vlan all`, ...).
+pub fn run_kind(snap: &Snapshot, logs: &Logs, only: Option<Kind>) -> CheckReport {
     let mut seen: BTreeSet<(Kind, String)> = BTreeSet::new();
     let mut entries = Vec::new();
-    for (kind, name) in objects(snap) {
+    for (kind, name) in objects(snap)
+        .into_iter()
+        .filter(|(k, _)| only.is_none_or(|o| *k == o))
+    {
         let entry = match trace_one(snap, logs, kind, &name) {
             Ok(r) => Entry {
                 kind,

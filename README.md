@@ -85,6 +85,9 @@ SUMMARY
 => some objects did not pass; trace one for details, e.g. sonic-trace --snapshot <bundle> route <prefix>
 ```
 
+- To see the full trace of every object of one kind, give `all` as the target:
+  `vlan all`, `port all`, `lag all` or `route all`. It ends with a count, e.g.
+  `6 vlan objects: 4 passed, 2 failed, 0 could not be traced`.
 - Objects come from the dump itself: `VLAN|`, `PORT|`, `PORTCHANNEL|` and `STATIC_ROUTE|`
   in CONFIG_DB, and `ROUTE_TABLE:` in APPL_DB. A route found under two names (a host
   route with and without its mask, or a static route and its APPL_DB entry) is traced once.
@@ -107,6 +110,7 @@ SUMMARY
 | `port` | `Ethernet` followed by a number | `Ethernet0`, `Ethernet160` | `eth0`, `Ethernet` |
 | `lag` | `PortChannel` followed by digits | `PortChannel001`, `PortChannel1` | `PortChannel`, `Po1` |
 | `check` | nothing; add `--details` for the full trace of each failure | `check`, `check --details` | |
+| any of `vlan`, `port`, `lag`, `route` | `all`: every object of that kind, full trace each | `vlan all`, `route all` | |
 | `route` | `[<VRF>:]<address>[/<mask>]` | `10.0.0.16/16`, `fe80::/64`, `10.1.0.32` (host route), `Vrf-red:20.0.0.0/24` | `10.0.0.0/33`, `1.2.3`, `Vrf:1.1.1.0/24` |
 
 Route targets in more detail:

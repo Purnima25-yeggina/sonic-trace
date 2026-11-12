@@ -50,13 +50,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// Trace a VLAN, e.g. Vlan100
+    /// Trace a VLAN, e.g. Vlan100, or `all` for every VLAN in the snapshot
     Vlan { name: String },
-    /// Trace a front-panel port, e.g. Ethernet0
+    /// Trace a front-panel port, e.g. Ethernet0, or `all`
     Port { name: String },
-    /// Trace a PortChannel, e.g. PortChannel001
+    /// Trace a PortChannel, e.g. PortChannel001, or `all`
     Lag { name: String },
-    /// Trace a route, e.g. 10.1.1.0/24, 10.1.0.32 (host route) or Vrf-red:10.1.1.0/24
+    /// Trace a route, e.g. 10.1.1.0/24, 10.1.0.32 (host route) or Vrf-red:10.1.1.0/24, or `all`
     Route { prefix: String },
     /// Trace every VLAN, port, LAG and route in the snapshot; list what passed and failed
     Check {
@@ -127,6 +127,26 @@ fn run(cli: Cli) -> Result<bool, String> {
             );
         } else {
             print!("{}", result.render_text(details));
+        }
+        return Ok(result.all_passed());
+    }
+    // `<kind> all`: every object of that kind, full trace each, then a count.
+    let all_of = match &cli.cmd {
+        Cmd::Vlan { name } if name == "all" => Some(check::Kind::Vlan),
+        Cmd::Port { name } if name == "all" => Some(check::Kind::Port),
+        Cmd::Lag { name } if name == "all" => Some(check::Kind::Lag),
+        Cmd::Route { prefix } if prefix == "all" => Some(check::Kind::Route),
+        _ => None,
+    };
+    if let Some(kind) = all_of {
+        let result = check::run_kind(&snap, &logs, Some(kind));
+        if cli.json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).map_err(|e| e.to_string())?
+            );
+        } else {
+            print!("{}", result.render_all(kind));
         }
         return Ok(result.all_passed());
     }

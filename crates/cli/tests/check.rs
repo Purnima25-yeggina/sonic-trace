@@ -194,3 +194,33 @@ fn corrupt_archive_is_an_error_not_a_crash() {
     assert_eq!(code, 2, "{err}");
     assert!(err.starts_with("error:"), "{err}");
 }
+
+#[test]
+fn kind_all_prints_every_full_trace_then_a_count() {
+    let (code, out, _) = run(&["--snapshot", "fixtures/bundle", "vlan", "all"]);
+    assert_eq!(code, 1, "{out}");
+    assert_eq!(out.matches("trace: Vlan").count(), 6, "{out}");
+    assert!(out.contains("trace: Vlan8\n  CONFIG_DB"), "{out}");
+    assert!(
+        out.ends_with("6 vlan objects: 4 passed, 2 failed, 0 could not be traced\n"),
+        "{out}"
+    );
+    // Only VLANs: no route traces.
+    assert!(!out.contains("trace: 10."), "{out}");
+}
+
+#[test]
+fn kind_all_with_nothing_of_that_kind_passes() {
+    let (code, out, _) = run(&["--snapshot", "fixtures/bundle", "lag", "all"]);
+    assert_eq!(code, 0, "{out}");
+    assert_eq!(out, "no lag objects found in the snapshot\n");
+}
+
+#[test]
+fn kind_all_json_lists_only_that_kind() {
+    let (_, out, _) = run(&["--snapshot", "fixtures/bundle", "--json", "route", "all"]);
+    let v: serde_json::Value = serde_json::from_str(&out).unwrap();
+    let entries = v["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 4);
+    assert!(entries.iter().all(|e| e["kind"] == "route"));
+}
