@@ -560,8 +560,12 @@ impl Tracker {
             }
             let slot = (c.object.clone(), c.member.clone());
             match c.source {
-                // A user-side change starts (or restarts) the timer.
-                Source::Config | Source::Appl => {
+                // A user-side change starts (or restarts) the timer. For ports only a
+                // CONFIG_DB change counts: orchagent itself writes link state
+                // (oper_status) to APPL_DB PORT_TABLE, which never touches the ASIC.
+                Source::Config | Source::Appl
+                    if c.source == Source::Config || c.object.0 != Kind::Port =>
+                {
                     let restart = self
                         .pending
                         .get(&slot)
@@ -1075,6 +1079,32 @@ mod tests {
             1,
             "seen before, and the log line is old: {out:?}"
         );
+    }
+
+    #[test]
+    fn port_link_state_updates_do_not_start_a_timer() {
+        let mut look = FakeLookup::default();
+        let mut t = Tracker::new(Filter::default(), 1000, AsicNames::default());
+        // orchagent reports a link going down: APPL_DB and STATE_DB change, the ASIC does not.
+        let out = t.on_input(
+            0,
+            &db(Source::Appl, "PORT_TABLE:Ethernet4", "hset"),
+            &mut look,
+        );
+        assert_eq!(out.len(), 1, "still shown: {out:?}");
+        t.on_input(
+            0,
+            &db(Source::State, "PORT_TABLE|Ethernet4", "hset"),
+            &mut look,
+        );
+        assert!(t.on_tick(5000).is_empty(), "no false stuck warning");
+        // A configured change still does.
+        t.on_input(
+            6000,
+            &db(Source::Config, "PORT|Ethernet4", "hset"),
+            &mut look,
+        );
+        assert_eq!(t.on_tick(7000).len(), 1);
     }
 
     #[test]
