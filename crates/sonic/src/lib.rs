@@ -2,6 +2,7 @@
 pub mod archive;
 pub mod check;
 pub mod lag;
+pub mod live;
 pub mod logs;
 pub mod port;
 pub mod route;

@@ -111,6 +111,7 @@ SUMMARY
 | `lag` | `PortChannel` followed by digits | `PortChannel001`, `PortChannel1` | `PortChannel`, `Po1` |
 | `check` | nothing; add `--details` for the full trace of each failure | `check`, `check --details` | |
 | any of `vlan`, `port`, `lag`, `route` | `all`: every object of that kind, full trace each | `vlan all`, `route all` | |
+| `live` | kinds and/or names to follow, or nothing for all (on a switch) | `live`, `live vlan`, `live Vlan100` | |
 | `route` | `[<VRF>:]<address>[/<mask>]` | `10.0.0.16/16`, `fe80::/64`, `10.1.0.32` (host route), `Vrf-red:20.0.0.0/24` | `10.0.0.0/33`, `1.2.3`, `Vrf:1.1.1.0/24` |
 
 Route targets in more detail:
@@ -254,6 +255,72 @@ that does not apply, such as CONFIG_DB for a BGP route, is shown as `n/a`.
 For LAGs, the ASIC LAG object has no name in SAI, so it is identified by its member
 ports (resolved through their host interfaces). An empty LAG cannot be identified and
 is shown as `n/a`.
+
+## Follow changes live
+
+On a switch, `live` follows changes as they happen, from CONFIG_DB to the ASIC. Run it
+in one terminal and configure in another:
+
+```
+sudo sonic-trace live                  # VLANs, ports, LAGs and routes
+sudo sonic-trace live vlan             # only VLANs
+sudo sonic-trace live vlan route       # VLANs and routes
+sudo sonic-trace live Vlan100          # one object
+sudo sonic-trace live --stuck-after 10 # warn after 10 s instead of 5
+```
+
+For example, `config vlan add 100`, `config vlan member add 100 Ethernet4`, and a route
+that never reaches the ASIC (a simulated session from the tests; the 0 ms is because the
+simulation sends both changes at once):
+
+```
+following VLANs, ports, LAGs and routes — CONFIG_DB, APPL_DB, STATE_DB, ASIC_DB, swss.rec, sairedis.rec, syslog (times UTC; Ctrl+C to stop)
+14:50:12.625  vlan  Vlan100              CONFIG_DB    set
+14:50:12.625  vlan  Vlan100              swss.rec     orchagent received SET
+14:50:12.625  vlan  Vlan100              APPL_DB      queued
+14:50:12.625  vlan  Vlan100              APPL_DB      set
+14:50:12.625  vlan  Vlan100              STATE_DB     set
+14:50:12.625  vlan  Vlan100              sairedis.rec SAI create
+14:50:12.927  vlan  Vlan100              ASIC_DB      set   ✅ reached the ASIC 302 ms after the CONFIG_DB change
+14:50:12.927  vlan  Vlan100              CONFIG_DB    set  member Ethernet4
+14:50:12.927  vlan  Vlan100              APPL_DB      set  member Ethernet4
+14:50:12.927  vlan  Vlan100              ASIC_DB      set  member Ethernet4   ✅ reached the ASIC 0 ms after the CONFIG_DB change
+14:50:12.930  route 10.9.0.0/24          APPL_DB      set
+14:50:12.930  route 10.9.0.0/24          syslog       2000 Jan 01 00:00:01.000000 host ERR swss#orchagent: :- addRoute: Failed to create route 10.9.0.0/24
+14:50:13.931  route 10.9.0.0/24                       ⚠ no ASIC update for it 1.0 s after the APPL_DB change (check syslog above, or trace it: sonic-trace --live route 10.9.0.0/24)
+```
+
+Where each line comes from:
+
+| Source | What it shows | How it is read |
+|---|---|---|
+| CONFIG_DB | what was configured | Redis keyspace notifications (database 4) |
+| APPL_DB | `queued` when a manager daemon wrote it, `set` when orchagent took it | notifications (database 0) |
+| STATE_DB | the kernel side is ready | notifications (database 6) |
+| ASIC_DB | programmed in the ASIC; ends the timer | notifications (database 1) |
+| swss.rec | what orchagent received | `/var/log/swss/swss.rec`, followed like `tail -F` |
+| sairedis.rec | the SAI calls made | `/var/log/swss/sairedis.rec` |
+| syslog | errors and warnings that name a followed object | `/var/log/syslog` |
+
+Syslog alone is not enough: it records errors, not every change. The databases are the
+record of each step, and SONiC's database container turns their notifications on
+(`notify-keyspace-events AKE`); `live` warns if they are off.
+
+- A CONFIG_DB or APPL_DB change starts a timer for that object (or member); the first
+  ASIC_DB change for it stops the timer. Without one, a `⚠` warning is printed once after
+  `--stuck-after` seconds. If the SAI call was recorded but ASIC_DB did not change, the
+  warning says so.
+- A port change that does not touch the ASIC (a description, for example) also ends in a
+  warning, worded as possibly normal.
+- Times are the time each change was seen, in UTC.
+- It needs `redis-cli` (present on SONiC switches; change it with `--redis-cli`, e.g.
+  `--redis-cli "redis-cli -s /var/run/redis/redis.sock"`). Run it with `sudo` to read
+  the logs. Log paths can be changed with `--swss-rec`, `--sairedis-rec` and `--syslog`.
+- Not covered yet: multi-ASIC switches, and orchagent's ZMQ mode (which bypasses
+  APPL_DB). It has been tested against a simulated switch session, not yet on hardware.
+
+`live` is different from `--live`: `--live` takes one snapshot of the running switch and
+traces one object; `live` keeps following changes until Ctrl+C.
 
 ## Logs, multi-ASIC and live mode
 

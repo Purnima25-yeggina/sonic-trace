@@ -2,7 +2,7 @@ use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use trace_sonic::{
-    archive, check, lag,
+    archive, check, lag, live,
     logs::{LogSource, Logs},
     port, route,
     snapshot::{BundleLayout, Snapshot},
@@ -18,7 +18,7 @@ use trace_sonic::{
 struct Cli {
     /// Offline input: a generate_dump archive (sonic_dump_*.tar.gz) or unpacked bundle
     /// (or its dump/ folder), a folder of per-database dumps, or one multi-database JSON file
-    #[arg(long, required_unless_present = "live", conflicts_with = "live")]
+    #[arg(long, conflicts_with = "live")]
     snapshot: Option<PathBuf>,
     /// Read the databases from this switch by running `sonic-db-dump` for each one
     #[arg(long)]
@@ -58,6 +58,17 @@ enum Cmd {
     Lag { name: String },
     /// Trace a route, e.g. 10.1.1.0/24, 10.1.0.32 (host route) or Vrf-red:10.1.1.0/24, or `all`
     Route { prefix: String },
+    /// On a switch: follow changes live, from CONFIG_DB to the ASIC, as you configure.
+    /// Give kinds (vlan, port, lag, route) and/or names (Vlan100, 10.1.1.0/24); none means all
+    Live {
+        targets: Vec<String>,
+        /// Warn when a change has not reached the ASIC after this many seconds
+        #[arg(long, default_value_t = 5)]
+        stuck_after: u64,
+        /// Command used to reach Redis
+        #[arg(long, default_value = "redis-cli")]
+        redis_cli: String,
+    },
     /// Trace every VLAN, port, LAG and route in the snapshot; list what passed and failed
     Check {
         /// Also print the full trace of each failed object
@@ -67,6 +78,35 @@ enum Cmd {
 }
 
 fn run(cli: Cli) -> Result<bool, String> {
+    if let Cmd::Live {
+        targets,
+        stuck_after,
+        redis_cli,
+    } = &cli.cmd
+    {
+        if cli.snapshot.is_some() {
+            return Err("live follows a running switch; it does not take --snapshot".into());
+        }
+        let log = |p: &Option<PathBuf>, default: &str| {
+            p.clone().unwrap_or_else(|| PathBuf::from(default))
+        };
+        let opts = live::io::Options {
+            redis_cli: redis_cli.clone(),
+            filter: live::Filter::parse(targets)?,
+            stuck_after: std::time::Duration::from_secs(*stuck_after),
+            swss_rec: log(&cli.swss_rec, "/var/log/swss/swss.rec"),
+            sairedis_rec: log(&cli.sairedis_rec, "/var/log/swss/sairedis.rec"),
+            syslog: log(&cli.syslog, "/var/log/syslog"),
+        };
+        live::io::run(opts, &mut std::io::stdout().lock())?;
+        return Ok(true);
+    }
+    if cli.snapshot.is_none() && !cli.live {
+        return Err(
+            "give --snapshot <dump> (a sonic_dump_*.tar.gz or folder), or --live on a switch"
+                .into(),
+        );
+    }
     let mut budget = cli.max_input_mb.saturating_mul(1024 * 1024);
     let mut layout: Option<BundleLayout> = None;
     // A .tar.gz bundle is unpacked (dumps and logs only) into a private temporary folder,
@@ -155,7 +195,9 @@ fn run(cli: Cli) -> Result<bool, String> {
         Cmd::Port { name } => port::trace_with(&snap, &logs, name)?,
         Cmd::Lag { name } => lag::trace_with(&snap, &logs, name)?,
         Cmd::Route { prefix } => route::trace_with(&snap, &logs, prefix)?,
-        Cmd::Check { .. } => return Err("unreachable: check is handled above".into()),
+        Cmd::Check { .. } | Cmd::Live { .. } => {
+            return Err("unreachable: handled above".into());
+        }
     };
     if cli.json {
         println!(

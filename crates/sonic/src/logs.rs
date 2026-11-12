@@ -135,7 +135,7 @@ const SYSLOG_MAX: usize = 200;
 /// starting at its beginning when the first matching token is near it, else around it.
 /// The key is the shortened message without the header, so repeats differing only in
 /// time or pid collapse into one.
-fn tidy_syslog(line: &str, tokens: &[&str]) -> (String, String) {
+pub(crate) fn tidy_syslog(line: &str, tokens: &[&str]) -> (String, String) {
     let flat = line.replace("#012", " ").replace("#011", " ");
     let flat = flat.split_whitespace().collect::<Vec<_>>().join(" ");
     let (head, msg) = match flat
@@ -235,7 +235,7 @@ fn plural(n: usize, word: &str) -> String {
     }
 }
 
-fn has_word(line: &str, token: &str) -> bool {
+pub(crate) fn has_word(line: &str, token: &str) -> bool {
     line.match_indices(token).any(|(i, _)| {
         let before = line.get(..i).and_then(|s| s.chars().next_back());
         let after = line.get(i + token.len()..).and_then(|s| s.chars().next());
@@ -245,7 +245,7 @@ fn has_word(line: &str, token: &str) -> bool {
 }
 
 /// Parse one `sairedis.rec` line into the per-object calls it contains.
-fn parse_sairedis_line(line: &str) -> Vec<SaiRec<'_>> {
+pub(crate) fn parse_sairedis_line(line: &str) -> Vec<SaiRec<'_>> {
     let mut head = line.splitn(3, '|');
     let (Some(ts), Some(op), Some(rest)) = (head.next(), head.next(), head.next()) else {
         return Vec::new();
