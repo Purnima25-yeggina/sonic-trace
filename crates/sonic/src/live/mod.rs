@@ -490,7 +490,15 @@ pub struct Tracker {
     /// Recent serious syslog lines, replayed when an object first appears: a log line can
     /// arrive just before the database change that introduces its object.
     recent_syslog: Vec<(u64, String)>,
+    /// Last time each identical change was printed, to collapse the burst of notifications
+    /// that one logical change produces (a VLAN create writes several fields to its key,
+    /// and Redis notifies on each one).
+    last_emitted: BTreeMap<(ObjectId, Option<String>, Source, String, bool), u64>,
 }
+
+/// Window within which an identical change (same object, member, source, op) is treated as
+/// a repeat of the same logical change and shown only once.
+const DEDUP_WINDOW_MS: u64 = 1000;
 
 /// How long and how many serious syslog lines are kept for replay.
 const SYSLOG_KEEP_MS: u64 = 10_000;
@@ -525,6 +533,7 @@ impl Tracker {
             pending: BTreeMap::new(),
             seen: BTreeSet::new(),
             recent_syslog: Vec::new(),
+            last_emitted: BTreeMap::new(),
         }
     }
 
@@ -553,6 +562,21 @@ impl Tracker {
             if !self.filter.allows(&c.object) {
                 continue;
             }
+            // Collapse the burst of identical notifications one logical change produces.
+            let dedup_key = (
+                c.object.clone(),
+                c.member.clone(),
+                c.source,
+                c.what.clone(),
+                c.removing,
+            );
+            if let Some(prev) = self.last_emitted.get(&dedup_key)
+                && now_ms.saturating_sub(*prev) < DEDUP_WINDOW_MS
+            {
+                self.last_emitted.insert(dedup_key, now_ms);
+                continue;
+            }
+            self.last_emitted.insert(dedup_key, now_ms);
             let first_time = self.seen.insert(c.object.clone());
             let mut text = c.what.clone();
             if let Some(m) = &c.member {
@@ -1079,6 +1103,55 @@ mod tests {
             1,
             "seen before, and the log line is old: {out:?}"
         );
+    }
+
+    #[test]
+    fn repeated_field_notifications_collapse_to_one_line() {
+        // A VLAN create fires several APPL_DB notifications for the same key (one per
+        // field); only one line should be shown per stage. Seen on real hardware.
+        let mut look = FakeLookup::default();
+        look.0.insert(
+            (
+                1,
+                "ASIC_STATE:SAI_OBJECT_TYPE_VLAN:oid:0x26".into(),
+                "SAI_VLAN_ATTR_VLAN_ID".into(),
+            ),
+            "999".into(),
+        );
+        let mut t = Tracker::new(Filter::default(), 5000, AsicNames::default());
+        let mut out = Vec::new();
+        out.extend(t.on_input(100, &db(Source::Config, "VLAN|Vlan999", "hset"), &mut look));
+        for ms in [110, 110, 110, 110] {
+            out.extend(t.on_input(
+                ms,
+                &db(Source::Appl, "VLAN_TABLE:Vlan999", "hset"),
+                &mut look,
+            ));
+        }
+        out.extend(t.on_input(
+            300,
+            &db(
+                Source::Asic,
+                "ASIC_STATE:SAI_OBJECT_TYPE_VLAN:oid:0x26",
+                "hset",
+            ),
+            &mut look,
+        ));
+        assert_eq!(
+            out.iter()
+                .filter(|l| l.contains("APPL_DB      set"))
+                .count(),
+            1,
+            "{out:#?}"
+        );
+        assert_eq!(out.len(), 3, "{out:#?}");
+        // A genuine later change of the same kind is still shown (outside the window).
+        let later = t.on_input(
+            2000,
+            &db(Source::Appl, "VLAN_TABLE:Vlan999", "hset"),
+            &mut look,
+        );
+        assert_eq!(later.len(), 1, "{later:?}");
     }
 
     #[test]
