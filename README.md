@@ -20,6 +20,20 @@ changes live on a running switch. It is **read-only** — it never changes your 
 > real support bundles and a live switch. See [COMMANDS.md](COMMANDS.md) for the full
 > command guide and [TRY-IT.md](TRY-IT.md) for a hands-on walkthrough.
 
+### Where it runs
+
+sonic-trace works in two ways:
+
+- **Offline — anywhere.** Point it at a `generate_dump` support bundle (`.tar.gz`) and it
+  analyses it with **no switch involved**. Run it on your laptop, a VM, a CI runner or the
+  switch itself — the dump is all it needs. This is the recommended way: zero impact on the
+  switch.
+- **Live — on the switch.** Run it on a running switch to read the current state
+  (`--live`) or follow changes as you configure (`live`).
+
+You do **not** need to copy the tool to a switch to use it. Grab a dump with
+`generate_dump`, copy that file to your computer, and analyse it there.
+
 ## What sonic-trace focuses on
 
 - **Diagnosing the pipeline.** It reports the first stage where an object is missing or the

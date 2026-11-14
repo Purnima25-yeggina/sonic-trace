@@ -52,6 +52,22 @@ sonic-trace never guesses — it reads real switch data. You tell it where from:
 Running offline with `--snapshot` on your own machine is the safest option — it never
 touches the switch at all.
 
+**Offline analysis runs anywhere.** You don't have to be on the switch, and you don't have
+to copy the tool onto it. The usual workflow:
+
+```bash
+# On the switch: collect a support bundle
+sudo generate_dump                       # writes /var/dump/sonic_dump_<host>_<date>.tar.gz
+
+# Copy it to your computer or VM
+scp admin@<switch>:/var/dump/sonic_dump_*.tar.gz .
+
+# Analyse it there — no switch involved
+sonic-trace --snapshot sonic_dump_*.tar.gz check
+```
+
+Only the **live** features (`--live`, `live`) need to run on the switch itself.
+
 ---
 
 ## 1. Commands
