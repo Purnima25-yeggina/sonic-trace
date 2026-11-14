@@ -9,10 +9,11 @@ Find where a SONiC config gets stuck. `sonic-trace` follows one object across
 CONFIG_DB, APPL_DB, STATE_DB and ASIC_DB and names the stage that dropped it.
 Offline, read-only, written in Rust.
 
-> **Status: early work in progress, tested on sample data only.** It has not yet been
-> run on a dump from a real switch. See [TRY-IT.md](TRY-IT.md) to run it yourself.
-> `vlan` (with member ports), `port`, `lag` and
-> `route` are implemented. Not an official SONiC project.
+> **Status: work in progress.** `vlan` (with member ports), `port`, `lag` and `route`
+> traces are implemented, plus `check` (health-check a whole bundle) and `live` (follow
+> changes on a switch). Validated on real support bundles and a live switch; see
+> [TRY-IT.md](TRY-IT.md) to run it yourself and [COMMANDS.md](COMMANDS.md) for the full
+> command guide. Not an official SONiC project.
 
 ## Why
 
@@ -23,6 +24,9 @@ comparison and reports the first stage where the object is missing or the
 databases disagree.
 
 ## Usage
+
+**New here? [COMMANDS.md](COMMANDS.md) is a friendly guide to every command and option,
+with a quick start and copy-paste examples.** The rest of this section is a summary.
 
 ```
 sonic-trace [OPTIONS] <COMMAND> <TARGET>
