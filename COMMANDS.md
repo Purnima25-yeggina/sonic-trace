@@ -217,6 +217,52 @@ The exit code lets scripts react without reading the text.
 
 ---
 
+## Target formats in detail
+
+What each command accepts, and what it rejects:
+
+| Command | Give it | Accepted | Rejected |
+|---|---|---|---|
+| `vlan` | `Vlan` + a number 1–4094 | `Vlan8`, `Vlan100` | `Vlan0`, `Vlan4095`, `vlan8` (case matters), `8` |
+| `port` | `Ethernet` + a number | `Ethernet0`, `Ethernet160` | `eth0`, `Ethernet` |
+| `lag` | `PortChannel` + digits | `PortChannel001`, `PortChannel1` | `PortChannel`, `Po1` |
+| `route` | `[<VRF>:]<address>[/<mask>]` | `10.0.0.16/16`, `fe80::/64`, `10.1.0.32`, `Vrf-red:20.0.0.0/24` | `10.0.0.0/33`, `1.2.3`, `Vrf:1.1.1.0/24` |
+
+Routes, in a bit more detail:
+
+- **Host routes** (`/32`, `/128`) can be written with or without the mask. SONiC stores
+  them in APPL_DB without it (`ROUTE_TABLE:10.1.0.32`) and in ASIC_DB with it; the tool
+  checks both. An address with no mask is treated as a host route.
+- **VRF routes** start with the VRF name, exactly as APPL_DB writes it:
+  `Vrf-red:20.0.0.0/24`. With no VRF, the default VRF is meant, and routes in other VRFs
+  are not matched.
+- The address is normalised (`FE80:0::1` → `fe80::1`), but host bits are kept:
+  `192.168.0.4/24` is looked up as written, not as `192.168.0.0/24`.
+
+## What a support bundle looks like
+
+The easiest input is an unpacked `generate_dump` bundle — point `--snapshot` at its top
+folder (or give it the `.tar.gz` directly):
+
+```
+sonic_dump_<host>_<date>/
+  dump/
+    CONFIG_DB.json      one file per database
+    APPL_DB.json
+    STATE_DB.json
+    ASIC_DB.json
+    APPL_DB.json.1      ASIC 1 on a multi-ASIC switch (use --asic 1)
+  log/
+    swss.rec.gz         logs are gzip-compressed; used for evidence
+    swss.rec.1.gz ...   older rotations (.1 is newest) are read too
+    sairedis.rec.gz
+    syslog.gz
+```
+
+You can also point `--snapshot` at the `dump/` folder, or at any folder holding one dump
+per database (lowercase names like `config_db.json` work too). Missing database files are
+skipped, but at least one must exist.
+
 ## A note on running on a switch
 
 - Running with `sudo` is only needed to read the log files under `/var/log/`.
