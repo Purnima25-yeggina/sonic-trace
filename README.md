@@ -395,6 +395,43 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
   `trace-sonic` holds the SONiC knowledge, and `sonic-trace` is the CLI. This keeps
   SONiC details out of the core.
 
+## Project structure
+
+```
+sonic-trace/
+├── crates/                     three Rust crates, smallest dependency first
+│   ├── core/                   report model and pipeline types — no I/O, no SONiC knowledge
+│   │   └── src/lib.rs
+│   ├── sonic/                  the SONiC knowledge: parsing and per-object traces
+│   │   ├── src/
+│   │   │   ├── snapshot.rs      load databases from a bundle, folder, .tar.gz or live switch
+│   │   │   ├── archive.rs       read a generate_dump .tar.gz without unpacking it
+│   │   │   ├── logs.rs          evidence from swss.rec / sairedis.rec / syslog (gzip, rotated)
+│   │   │   ├── vlan.rs port.rs lag.rs route.rs   the four object traces
+│   │   │   ├── check.rs         trace everything and summarise pass/fail
+│   │   │   └── live/            follow changes on a running switch
+│   │   │       ├── mod.rs        the tracker (pure: classify changes, time them)
+│   │   │       └── io.rs         redis-cli notifications and log followers
+│   │   └── tests/              per-object and real-format regression tests
+│   └── cli/                    the sonic-trace command-line program
+│       ├── src/main.rs
+│       └── tests/              end-to-end tests (golden output, check, live)
+├── fixtures/                   synthetic sample data (safe to run on; no real switch data)
+│   ├── bundle/                 a realistic generate_dump bundle (dump/ + gzipped logs)
+│   ├── community/              per-object dumps from SONiC's own tests
+│   └── multi-asic/             a two-ASIC example
+├── tests/golden/               expected text / JSON / exit codes, pinned
+├── fuzz/                       libFuzzer targets and seed corpus
+├── tools/                      helper scripts (check, fuzz, gen-bundle-fixture.py)
+├── .github/workflows/ci.yml    build, test, clippy, fmt on every push
+├── COMMANDS.md                 friendly command guide
+├── TRY-IT.md                   hands-on walkthrough
+├── CONTRIBUTING.md  SECURITY.md  LICENSE  NOTICE
+├── README.md
+├── Cargo.toml  Cargo.lock      workspace manifest and lockfile
+└── rust-toolchain.toml         pinned Rust version
+```
+
 ## Limits
 
 - Only VLANs, ports, LAGs and routes so far.
