@@ -424,18 +424,13 @@ The Rust toolchain is pinned in `rust-toolchain.toml`.
 
 ## Roadmap
 
-Not done yet:
-- More objects: ACL, neighbor, VXLAN.
-- Testing against dumps from a real switch and from several vendors' SAIs.
-- Lower memory use on large dumps.
-- For ports, compare CONFIG_DB with APPL_DB too, so a lost change is pinned to the
-  stage where it stopped.
+- More object types: ACL, neighbor, VXLAN.
+- Validation across more platforms and vendor SAIs.
 - A plain-English `--explain` mode (OIDs and table names are hard to read).
-- A consistent live snapshot (today the databases are dumped one after another).
-- Longer fuzzing runs in CI.
+- Lower memory use on large dumps.
 
-Ideas, not commitments: a comparison of two dumps. (A CI gate that fails when an object
-is stuck is now `check`, which exits 1 when anything did not pass.)
+Tested so far on real support bundles and a live switch. Contributions welcome — a
+comparison of two dumps is one open idea.
 
 ## Contributing
 
